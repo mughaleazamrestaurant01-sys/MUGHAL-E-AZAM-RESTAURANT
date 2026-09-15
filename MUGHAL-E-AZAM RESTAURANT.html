@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MUGHAL-E-AZAM - Restaurant</title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon.ico">
     <link rel="icon" type="image/jpeg" href="assets/images/logo.jpg">
+    <link rel="shortcut icon" href="assets/images/favicon.ico">
     <!-- Tailwind CSS -->
     <script src="assets/js/tailwindcss.js"></script>
     <!-- FontAwesome Icons -->
@@ -170,6 +172,138 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Admin Panel Dedicated Page Tab -->
+            <div v-show="currentTab === 'admin' && hasPermission('admin_dash')" class="h-full p-6 overflow-y-auto space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262832]">
+                    <div class="flex items-center space-x-3">
+                        <img src="assets/images/logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl border border-amber-400 object-cover">
+                        <div>
+                            <h2 class="text-xl font-bold font-royal text-white">Admin Panel - Daily Sales & Cash Analytics</h2>
+                            <p class="text-xs text-neu-muted">Real-time revenue, cash drawer balance, expense logging, payment breakdown & order channels</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-3">
+                        <button @click="showOpeningBalanceModal = true" class="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-2xl text-xs font-bold flex items-center space-x-2">
+                            <i class="fa-solid fa-vault"></i>
+                            <span>Opening Cash: Rs. {{ dailyOpeningCash }}</span>
+                        </button>
+                        <button @click="showAddExpenseModal = true" class="px-4 py-2 bg-neu-accent text-white rounded-2xl text-xs font-bold neu-accent-glow flex items-center space-x-2">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Log Expense</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Primary Financial Metric Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
+                        <p class="text-xs text-neu-muted font-medium">Opening Cash Drawer</p>
+                        <p class="text-xl font-bold text-amber-400 mt-1">Rs. {{ dailyOpeningCash.toLocaleString('en-PK') }}</p>
+                        <span class="text-[10px] text-neu-muted">Initial Cash Base</span>
+                    </div>
+
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
+                        <p class="text-xs text-neu-muted font-medium">Gross Sales Revenue</p>
+                        <p class="text-xl font-bold text-emerald-400 mt-1">Rs. {{ totalRevenue.toLocaleString('en-PK') }}</p>
+                        <span class="text-[10px] text-emerald-400 font-semibold">{{ orderHistory.length }} Total Paid Orders</span>
+                    </div>
+
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
+                        <p class="text-xs text-neu-muted font-medium">Total Expenses Outflow</p>
+                        <p class="text-xl font-bold text-neu-accent mt-1">Rs. {{ totalExpenses.toLocaleString('en-PK') }}</p>
+                        <span class="text-[10px] text-neu-muted">{{ expenses.length }} Expense Entries</span>
+                    </div>
+
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
+                        <p class="text-xs text-neu-muted font-medium">Expected Drawer Cash</p>
+                        <p class="text-xl font-bold text-blue-400 mt-1">Rs. {{ expectedCashInDrawer.toLocaleString('en-PK') }}</p>
+                        <span class="text-[10px] text-neu-muted">Opening + Cash Sales - Exp</span>
+                    </div>
+
+                    <div class="neu-flat p-4 rounded-3xl border" :class="netProfit >= 0 ? 'border-emerald-500/30' : 'border-neu-accent/30'">
+                        <p class="text-xs text-neu-muted font-medium">Net Profit / Loss</p>
+                        <p class="text-xl font-bold mt-1" :class="netProfit >= 0 ? 'text-emerald-400' : 'text-neu-accent'">
+                            {{ netProfit >= 0 ? '+' : '' }}Rs. {{ netProfit.toLocaleString('en-PK') }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Detailed Payment Method & Order Channel Breakdown Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <!-- Cash Sales -->
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833] bg-[#1a1c23]">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-neu-muted font-bold uppercase"><i class="fa-solid fa-money-bill-wave text-emerald-400 mr-1.5"></i>Cash Sales</span>
+                            <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold">{{ paymentBreakdown.cashCount }} Orders</span>
+                        </div>
+                        <p class="text-lg font-bold text-white mt-1">Rs. {{ paymentBreakdown.cashTotal.toLocaleString('en-PK') }}</p>
+                    </div>
+
+                    <!-- Online / Card Sales -->
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833] bg-[#1a1c23]">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-neu-muted font-bold uppercase"><i class="fa-solid fa-credit-card text-blue-400 mr-1.5"></i>Online / Card</span>
+                            <span class="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold">{{ paymentBreakdown.onlineCount }} Orders</span>
+                        </div>
+                        <p class="text-lg font-bold text-white mt-1">Rs. {{ paymentBreakdown.onlineTotal.toLocaleString('en-PK') }}</p>
+                    </div>
+
+                    <!-- Dining Sales -->
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833] bg-[#1a1c23]">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-neu-muted font-bold uppercase"><i class="fa-solid fa-utensils text-amber-400 mr-1.5"></i>Dine-In</span>
+                            <span class="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">{{ channelBreakdown.dineInCount }} Orders</span>
+                        </div>
+                        <p class="text-lg font-bold text-white mt-1">Rs. {{ channelBreakdown.dineInTotal.toLocaleString('en-PK') }}</p>
+                    </div>
+
+                    <!-- Takeaway Sales -->
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833] bg-[#1a1c23]">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-neu-muted font-bold uppercase"><i class="fa-solid fa-bag-shopping text-purple-400 mr-1.5"></i>Takeaway</span>
+                            <span class="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded font-bold">{{ channelBreakdown.takeawayCount }} Orders</span>
+                        </div>
+                        <p class="text-lg font-bold text-white mt-1">Rs. {{ channelBreakdown.takeawayTotal.toLocaleString('en-PK') }}</p>
+                    </div>
+
+                    <!-- Delivery Sales -->
+                    <div class="neu-flat p-4 rounded-3xl border border-[#262833] bg-[#1a1c23]">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-neu-muted font-bold uppercase"><i class="fa-solid fa-truck-fast text-neu-accent mr-1.5"></i>Delivery</span>
+                            <span class="text-[10px] bg-neu-accent/20 text-neu-accent px-1.5 py-0.5 rounded font-bold">{{ channelBreakdown.deliveryCount }} Orders</span>
+                        </div>
+                        <p class="text-lg font-bold text-white mt-1">Rs. {{ channelBreakdown.deliveryTotal.toLocaleString('en-PK') }}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="neu-flat p-5 rounded-3xl border border-[#252833]">
+                        <h3 class="font-bold text-white text-sm mb-3"><i class="fa-solid fa-kitchen-set text-neu-accent mr-2"></i>Active Kitchen Orders Queue</h3>
+                        <div v-if="kdsOrders.length === 0" class="text-neu-muted text-xs p-6 text-center">
+                            No pending orders in kitchen queue.
+                        </div>
+                        <div v-else class="space-y-2 max-h-48 overflow-y-auto">
+                            <div v-for="q in kdsOrders" :key="q.id" class="p-3 rounded-2xl neu-pressed flex justify-between items-center text-xs">
+                                <span class="font-bold text-white">#{{ q.id }} - {{ q.orderType }}</span>
+                                <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px]">{{ q.status }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="neu-flat p-5 rounded-3xl border border-[#252833]">
+                        <h3 class="font-bold text-white text-sm mb-3"><i class="fa-solid fa-chart-pie text-purple-400 mr-2"></i>Category Sales Breakdown</h3>
+                        <div class="space-y-3">
+                            <div v-for="cat in categorySalesBreakdown" :key="cat.name" class="space-y-1">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-white font-medium">{{ cat.icon }} {{ cat.name }}</span>
+                                    <span class="text-emerald-400 font-bold">Rs. {{ cat.amount.toLocaleString('en-PK') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Main Header Bar -->
@@ -261,9 +395,10 @@
                     <span>Backup</span>
                 </button>
 
-                <!-- Admin Panel Button at the very last position -->
-                <button v-if="hasPermission('admin_dash')" @click="showAdminPanelModal = true" class="px-3.5 py-2 bg-neu-accent text-white rounded-xl text-xs font-bold neu-accent-glow flex items-center space-x-1.5 whitespace-nowrap ml-auto">
-                    <i class="fa-solid fa-chart-line"></i>
+                <!-- Admin Panel Button -->
+                <button v-if="hasPermission('admin_dash')" @click="currentTab = 'admin'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'admin'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-1.5 text-neu-muted transition-all whitespace-nowrap border border-transparent ml-auto">
+                    <i class="fa-solid fa-chart-line text-neu-accent"></i>
                     <span>Admin Panel</span>
                 </button>
             </div>
@@ -306,7 +441,7 @@
                                 <span class="text-[10px] px-1.5 py-0.2 rounded bg-[#191a1f] neu-pressed text-neu-accent font-semibold">{{ item.code }}</span>
                                 <span v-if="isCategoryDiscountAllowed(item.category)" class="text-[8px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold">DISC</span>
                             </div>
-                            
+
                             <div class="my-auto">
                                 <h3 class="font-semibold text-xs text-white group-hover:text-neu-accent transition line-clamp-1">{{ item.name }}</h3>
                                 <p class="text-[10px] text-neu-muted line-clamp-1">{{ item.desc }}</p>
@@ -437,6 +572,13 @@
                         <h2 class="text-xl font-bold font-royal text-white">Menu Items & Category Management</h2>
                         <p class="text-xs text-neu-muted">Add new food categories with discount rules, create menu dishes, and manage active offerings</p>
                     </div>
+                    <div class="flex items-center space-x-3">
+                        <label class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold cursor-pointer flex items-center space-x-2">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Upload Menu CSV</span>
+                            <input type="file" accept=".csv" @change="uploadMenuCSV" class="hidden">
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Create Category & Create Item Forms -->
@@ -475,6 +617,14 @@
                                 <div v-for="cat in categories" :key="cat.id" class="px-3 py-1.5 rounded-xl neu-pressed text-xs text-white flex items-center space-x-2">
                                     <span>{{ cat.icon }} {{ cat.name }}</span>
                                     <span v-if="cat.allowDiscount" class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded font-bold">Discount Allowed</span>
+                                    <div v-if="cat.id !== 'all'" class="flex items-center space-x-1.5 ml-2 border-l border-[#2e313d] pl-2">
+                                        <button type="button" @click="openEditCategory(cat)" class="text-amber-400 hover:text-amber-300 text-[11px]" title="Edit / Rename Category">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button type="button" @click="deleteCategory(cat.id)" class="text-neu-accent hover:text-red-400 text-[11px]" title="Delete Category">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -491,10 +641,10 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-neu-muted block mb-1">Dish Name</label>
-                                    <input type="text" v-model="newDishForm.name" placeholder="e.g. Mutton Karahi" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <input type="text" v-model="newDishForm.name" @input="autoGenerateDishCode" placeholder="e.g. Mutton Karahi" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
                                 </div>
                                 <div>
-                                    <label class="text-neu-muted block mb-1">Dish Code</label>
+                                    <label class="text-neu-muted block mb-1">Dish Code (Auto-generated)</label>
                                     <input type="text" v-model="newDishForm.code" placeholder="e.g. CUR01" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
                                 </div>
                             </div>
@@ -526,7 +676,13 @@
 
                 <!-- Active Menu Items List Table -->
                 <div class="neu-flat p-6 rounded-3xl border border-[#252833]">
-                    <h3 class="font-bold text-white text-sm mb-4">All Registered Menu Dishes</h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <h3 class="font-bold text-white text-sm">All Registered Menu Dishes</h3>
+                        <div class="relative w-full sm:w-64">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-neu-muted text-xs"></i>
+                            <input type="text" v-model="menuSearchQuery" placeholder="Search dish code or name..." class="w-full neu-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white outline-none">
+                        </div>
+                    </div>
 
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs text-neu-text">
@@ -540,16 +696,22 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#252833]">
-                                <tr v-for="item in menuItems" :key="item.id" class="hover:bg-[#1f2129]">
+                                <tr v-for="item in filteredManageMenuItems" :key="item.id" class="hover:bg-[#1f2129]">
                                     <td class="p-3 font-bold text-amber-400">{{ item.code }}</td>
                                     <td class="p-3 font-semibold text-white">{{ item.name }}</td>
                                     <td class="p-3 text-neu-muted">{{ getCategoryName(item.category) }}</td>
                                     <td class="p-3 font-bold text-emerald-400">Rs. {{ item.price }}</td>
-                                    <td class="p-3 text-right">
-                                        <button @click="deleteMenuItem(item.id)" class="px-2.5 py-1 rounded-xl neu-button text-neu-accent hover:text-white text-xs">
+                                    <td class="p-3 text-right space-x-2">
+                                        <button @click="openEditDish(item)" class="px-2.5 py-1 rounded-xl neu-button text-amber-400 hover:text-white text-xs" title="Edit Item Details">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button @click="deleteMenuItem(item.id)" class="px-2.5 py-1 rounded-xl neu-button text-neu-accent hover:text-white text-xs" title="Delete Item">
                                             <i class="fa-solid fa-trash-can"></i>
                                         </button>
                                     </td>
+                                </tr>
+                                <tr v-if="filteredManageMenuItems.length === 0">
+                                    <td colspan="5" class="p-6 text-center text-neu-muted">No menu items found.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -565,6 +727,11 @@
                         <p class="text-xs text-neu-muted">Manage stock ingredients and configure dish recipes</p>
                     </div>
                     <div class="flex items-center space-x-3">
+                        <label class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold cursor-pointer flex items-center space-x-2">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Upload Stock CSV</span>
+                            <input type="file" accept=".csv" @change="uploadStockCSV" class="hidden">
+                        </label>
                         <button @click="showRecipeModal = true" class="px-4 py-2.5 bg-purple-600 text-white rounded-2xl text-xs font-bold flex items-center space-x-2">
                             <i class="fa-solid fa-sliders"></i>
                             <span>Dish Recipes</span>
@@ -810,95 +977,6 @@
             </div>
         </div>
 
-        <!-- Admin Panel Modal (Full Executive Financial Summary & Analytics) -->
-        <div v-if="showAdminPanelModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-            <div class="neu-flat w-full max-w-5xl rounded-3xl p-6 border border-[#282a35] max-h-[90vh] flex flex-col overflow-y-auto space-y-6">
-                <div class="flex justify-between items-center pb-4 border-b border-[#262832]">
-                    <div class="flex items-center space-x-3">
-                        <img src="assets/images/logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl border border-amber-400 object-cover">
-                        <div>
-                            <h2 class="text-lg font-bold font-royal text-white">Admin Panel - Executive Summary & Cash Drawer</h2>
-                            <p class="text-xs text-neu-muted">Real-time revenue, cash drawer balance, expense logging, and net profit analytics</p>
-                        </div>
-                    </div>
-                    <button @click="showAdminPanelModal = false" class="w-8 h-8 rounded-xl neu-button text-neu-muted hover:text-white flex items-center justify-center">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-
-                <!-- Financial Metric Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
-                        <p class="text-xs text-neu-muted font-medium">Opening Cash Drawer</p>
-                        <p class="text-xl font-bold text-amber-400 mt-1">Rs. {{ dailyOpeningCash.toLocaleString('en-PK') }}</p>
-                        <span class="text-[10px] text-neu-muted">Initial Cash Base</span>
-                    </div>
-
-                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
-                        <p class="text-xs text-neu-muted font-medium">Gross Sales Revenue</p>
-                        <p class="text-xl font-bold text-emerald-400 mt-1">Rs. {{ totalRevenue.toLocaleString('en-PK') }}</p>
-                        <span class="text-[10px] text-emerald-400 font-semibold">{{ orderHistory.length }} Paid Orders</span>
-                    </div>
-
-                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
-                        <p class="text-xs text-neu-muted font-medium">Total Expenses Outflow</p>
-                        <p class="text-xl font-bold text-neu-accent mt-1">Rs. {{ totalExpenses.toLocaleString('en-PK') }}</p>
-                        <span class="text-[10px] text-neu-muted">{{ expenses.length }} Expense Entries</span>
-                    </div>
-
-                    <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
-                        <p class="text-xs text-neu-muted font-medium">Expected Drawer Cash</p>
-                        <p class="text-xl font-bold text-blue-400 mt-1">Rs. {{ expectedCashInDrawer.toLocaleString('en-PK') }}</p>
-                        <span class="text-[10px] text-neu-muted">Opening + Sales - Exp</span>
-                    </div>
-
-                    <div class="neu-flat p-4 rounded-3xl border" :class="netProfit >= 0 ? 'border-emerald-500/30' : 'border-neu-accent/30'">
-                        <p class="text-xs text-neu-muted font-medium">Net Profit / Loss</p>
-                        <p class="text-xl font-bold mt-1" :class="netProfit >= 0 ? 'text-emerald-400' : 'text-neu-accent'">
-                            {{ netProfit >= 0 ? '+' : '' }}Rs. {{ netProfit.toLocaleString('en-PK') }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="flex justify-end space-x-3">
-                    <button @click="showOpeningBalanceModal = true" class="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-2xl text-xs font-bold flex items-center space-x-2">
-                        <i class="fa-solid fa-vault"></i>
-                        <span>Opening Cash: Rs. {{ dailyOpeningCash }}</span>
-                    </button>
-                    <button @click="showAddExpenseModal = true" class="px-4 py-2 bg-neu-accent text-white rounded-2xl text-xs font-bold neu-accent-glow flex items-center space-x-2">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Log Expense</span>
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="neu-flat p-5 rounded-3xl border border-[#252833]">
-                        <h3 class="font-bold text-white text-sm mb-3"><i class="fa-solid fa-kitchen-set text-neu-accent mr-2"></i>Active Kitchen Orders Queue</h3>
-                        <div v-if="kdsOrders.length === 0" class="text-neu-muted text-xs p-6 text-center">
-                            No pending orders in kitchen queue.
-                        </div>
-                        <div v-else class="space-y-2 max-h-48 overflow-y-auto">
-                            <div v-for="q in kdsOrders" :key="q.id" class="p-3 rounded-2xl neu-pressed flex justify-between items-center text-xs">
-                                <span class="font-bold text-white">#{{ q.id }} - {{ q.orderType }}</span>
-                                <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px]">{{ q.status }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="neu-flat p-5 rounded-3xl border border-[#252833]">
-                        <h3 class="font-bold text-white text-sm mb-3"><i class="fa-solid fa-chart-pie text-purple-400 mr-2"></i>Category Sales Breakdown</h3>
-                        <div class="space-y-3">
-                            <div v-for="cat in categorySalesBreakdown" :key="cat.name" class="space-y-1">
-                                <div class="flex justify-between text-xs">
-                                    <span class="text-white font-medium">{{ cat.icon }} {{ cat.name }}</span>
-                                    <span class="text-emerald-400 font-bold">Rs. {{ cat.amount.toLocaleString('en-PK') }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Checkout Payment Modal -->
         <div v-if="showCheckoutModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -984,7 +1062,7 @@
 
                 <div class="space-y-4 text-xs">
                     <div class="grid grid-cols-4 gap-2">
-                        <button v-for="pct in [5, 10, 15, 20]" :key="pct" @click="discountPercent = pct" 
+                        <button v-for="pct in [5, 10, 15, 20]" :key="pct" @click="discountPercent = pct"
                             :class="discountPercent === pct ? 'bg-neu-accent text-white font-bold' : 'neu-button text-neu-muted'"
                             class="py-2.5 rounded-xl text-xs">
                             {{ pct }}%
@@ -1099,6 +1177,90 @@
             </div>
         </div>
 
+        <!-- Edit Dish / Menu Item Modal -->
+        <div v-if="showEditDishModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-lg rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-[#262832]">
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-pen-to-square text-amber-400"></i>
+                        <span>Edit Menu Item</span>
+                    </h3>
+                    <button @click="showEditDishModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <form @submit.prevent="updateDish" class="space-y-3 text-xs">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-neu-muted block mb-1">Dish Name</label>
+                            <input type="text" v-model="editDishForm.name" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="text-neu-muted block mb-1">Dish Code</label>
+                            <input type="text" v-model="editDishForm.code" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-neu-muted block mb-1">Category</label>
+                            <select v-model="editDishForm.category" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.icon }} {{ cat.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-neu-muted block mb-1">Price (Rs.)</label>
+                            <input type="number" v-model.number="editDishForm.price" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1">Description</label>
+                        <input type="text" v-model="editDishForm.desc" placeholder="Brief description or ingredient info" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                    </div>
+
+                    <div class="pt-2 flex justify-end space-x-3">
+                        <button type="button" @click="showEditDishModal = false" class="px-4 py-2 rounded-xl neu-button text-neu-muted">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Update Menu Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Edit Category Modal -->
+        <div v-if="showEditCategoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-[#262832]">
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-pen-to-square text-amber-400"></i>
+                        <span>Edit Category</span>
+                    </h3>
+                    <button @click="showEditCategoryModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <form @submit.prevent="updateCategory" class="space-y-3 text-xs">
+                    <div>
+                        <label class="text-neu-muted block mb-1">Category Name</label>
+                        <input type="text" v-model="editCategoryForm.name" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1">Category Icon / Emoji</label>
+                        <input type="text" v-model="editCategoryForm.icon" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                    </div>
+
+                    <label class="flex items-center space-x-2 text-neu-text cursor-pointer pt-1">
+                        <input type="checkbox" v-model="editCategoryForm.allowDiscount" class="rounded accent-neu-accent w-4 h-4">
+                        <span class="font-bold">Allow Discount on items in this category</span>
+                    </label>
+
+                    <div class="pt-2 flex justify-end space-x-3">
+                        <button type="button" @click="showEditCategoryModal = false" class="px-4 py-2 rounded-xl neu-button text-neu-muted">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl shadow">Update Category</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Modal: Add Expense -->
         <div v-if="showAddExpenseModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="neu-flat w-full max-w-sm rounded-3xl p-6 border border-[#282a35]">
@@ -1196,22 +1358,23 @@
                     showBackupModal: false,
                     showRecipeModal: false,
                     showAdminPanelModal: false,
+                    showEditCategoryModal: false,
+                    showEditDishModal: false,
 
+                    menuSearchQuery: '',
                     discountPercent: 0,
                     toastMessage: '',
                     selectedHistoryDate: new Date().toISOString().split('T')[0],
 
                     newExpenseForm: { title: '', amount: null },
                     newStockForm: { name: '', unit: 'kg', qty: 0, unitCost: 0 },
-                    newDishForm: { name: '', code: '', category: 'fastfood', price: null, desc: '' },
+                    newDishForm: { name: '', code: '', category: '', price: null, desc: '' },
+                    editDishForm: { id: null, name: '', code: '', category: '', price: null, desc: '' },
                     newCategoryForm: { name: '', icon: '🍽️', allowDiscount: true },
+                    editCategoryForm: { id: '', name: '', icon: '🍽️', allowDiscount: true },
 
                     categories: [
-                        { id: 'all', name: 'All Items', icon: '👑', allowDiscount: false },
-                        { id: 'fastfood', name: 'Fast Food', icon: '🍔', allowDiscount: true },
-                        { id: 'bbq', name: 'BBQ & Grill', icon: '🍢', allowDiscount: false },
-                        { id: 'curries', name: 'Shahi Curries', icon: '🥘', allowDiscount: false },
-                        { id: 'drinks', name: 'Beverages', icon: '🍹', allowDiscount: false }
+                        { id: 'all', name: 'All Items', icon: '👑', allowDiscount: false }
                     ],
 
                     inventory: [
@@ -1220,15 +1383,15 @@
                     ],
 
                     menuItems: [
-                        { 
+                        {
                             id: 1, code: 'FF01', name: 'Royal Zinger Burger', category: 'fastfood', price: 480, desc: 'Crispy fried chicken breast fillet in soft bun',
                             recipe: [{ ingredientId: 1, qty: 1 }, { ingredientId: 2, qty: 0.2 }]
                         },
-                        { 
+                        {
                             id: 2, code: 'BBQ01', name: 'Chicken Tikka Boti', category: 'bbq', price: 650, desc: 'Smoky spiced chargrilled chicken boti',
                             recipe: [{ ingredientId: 2, qty: 0.35 }]
                         },
-                        { 
+                        {
                             id: 3, code: 'DRK01', name: 'Cold Drink Bottle 1.5L', category: 'drinks', price: 180, desc: 'Chilled beverage',
                             recipe: []
                         }
@@ -1256,6 +1419,14 @@
                         const matchesCategory = this.selectedCategory === 'all' || item.category === this.selectedCategory;
                         const matchesSearch = item.name.toLowerCase().includes(this.searchQuery.toLowerCase()) || item.code.toLowerCase().includes(this.searchQuery.toLowerCase());
                         return matchesCategory && matchesSearch;
+                    });
+                },
+
+                filteredManageMenuItems() {
+                    if (!this.menuSearchQuery) return this.menuItems;
+                    const q = this.menuSearchQuery.toLowerCase().trim();
+                    return this.menuItems.filter(item => {
+                        return item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q);
                     });
                 },
 
@@ -1295,8 +1466,47 @@
                     return this.expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
                 },
 
+                paymentBreakdown() {
+                    let cashTotal = 0, cashCount = 0;
+                    let onlineTotal = 0, onlineCount = 0;
+                    this.orderHistory.forEach(ord => {
+                        const method = (ord.paymentMethod || 'Cash').toLowerCase();
+                        if (method.includes('cash')) {
+                            cashTotal += ord.grandTotal;
+                            cashCount++;
+                        } else {
+                            onlineTotal += ord.grandTotal;
+                            onlineCount++;
+                        }
+                    });
+                    return { cashTotal, cashCount, onlineTotal, onlineCount };
+                },
+
+                channelBreakdown() {
+                    let dineInTotal = 0, dineInCount = 0;
+                    let takeawayTotal = 0, takeawayCount = 0;
+                    let deliveryTotal = 0, deliveryCount = 0;
+                    this.orderHistory.forEach(ord => {
+                        const type = (ord.orderType || 'Dine-In').toLowerCase();
+                        if (type.includes('dine')) {
+                            dineInTotal += ord.grandTotal;
+                            dineInCount++;
+                        } else if (type.includes('takeaway') || type.includes('take')) {
+                            takeawayTotal += ord.grandTotal;
+                            takeawayCount++;
+                        } else if (type.includes('delivery')) {
+                            deliveryTotal += ord.grandTotal;
+                            deliveryCount++;
+                        } else {
+                            dineInTotal += ord.grandTotal;
+                            dineInCount++;
+                        }
+                    });
+                    return { dineInTotal, dineInCount, takeawayTotal, takeawayCount, deliveryTotal, deliveryCount };
+                },
+
                 expectedCashInDrawer() {
-                    return Number(this.dailyOpeningCash) + Number(this.totalRevenue) - Number(this.totalExpenses);
+                    return Number(this.dailyOpeningCash) + Number(this.paymentBreakdown.cashTotal) - Number(this.totalExpenses);
                 },
 
                 netProfit() {
@@ -1452,21 +1662,212 @@
                     this.showToast('New category added!');
                 },
 
+                openEditCategory(cat) {
+                    if (cat.id === 'all') return;
+                    this.editCategoryForm = {
+                        id: cat.id,
+                        name: cat.name,
+                        icon: cat.icon,
+                        allowDiscount: cat.allowDiscount
+                    };
+                    this.showEditCategoryModal = true;
+                },
+
+                updateCategory() {
+                    const cat = this.categories.find(c => c.id === this.editCategoryForm.id);
+                    if (cat) {
+                        cat.name = this.editCategoryForm.name;
+                        cat.icon = this.editCategoryForm.icon || '🍽️';
+                        cat.allowDiscount = !!this.editCategoryForm.allowDiscount;
+                        this.saveLocalStorageBackup();
+                        this.showToast('Category updated!');
+                    }
+                    this.showEditCategoryModal = false;
+                },
+
+                deleteCategory(catId) {
+                    if (catId === 'all') return;
+                    if (confirm('Are you sure you want to delete this category? Menu items in this category will remain.')) {
+                        this.categories = this.categories.filter(c => c.id !== catId);
+                        if (this.selectedCategory === catId) {
+                            this.selectedCategory = 'all';
+                        }
+                        this.saveLocalStorageBackup();
+                        this.showToast('Category deleted!');
+                    }
+                },
+
+                parseCSV(text) {
+                    const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    if (lines.length === 0) return [];
+
+                    const parseLine = (line) => {
+                        const values = [];
+                        let current = '';
+                        let inQuotes = false;
+                        for (let i = 0; i < line.length; i++) {
+                            const char = line[i];
+                            if (char === '"') {
+                                inQuotes = !inQuotes;
+                            } else if (char === ',' && !inQuotes) {
+                                values.push(current.trim().replace(/^"|"$/g, ''));
+                                current = '';
+                            } else {
+                                current += char;
+                            }
+                        }
+                        values.push(current.trim().replace(/^"|"$/g, ''));
+                        return values;
+                    };
+
+                    const headers = parseLine(lines[0]).map(h => h.toLowerCase());
+                    const rows = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const vals = parseLine(lines[i]);
+                        if (vals.length === 0) continue;
+                        const rowObj = {};
+                        headers.forEach((h, idx) => {
+                            rowObj[h] = vals[idx] !== undefined ? vals[idx] : '';
+                        });
+                        rows.push(rowObj);
+                    }
+                    return rows;
+                },
+
+                uploadMenuCSV(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const rows = this.parseCSV(e.target.result);
+                            let count = 0;
+                            rows.forEach(r => {
+                                const name = r.name || r['item name'] || r.dish || r['dish name'];
+                                const price = Number(r.price || r.cost || 0);
+                                if (name && !isNaN(price) && price > 0) {
+                                    const rawCat = (r.category || r['cat'] || 'General').trim();
+                                    const catId = rawCat.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                                    if (catId && !this.categories.some(c => c.id === catId)) {
+                                        this.categories.push({
+                                            id: catId,
+                                            name: rawCat,
+                                            icon: '🍽️',
+                                            allowDiscount: true
+                                        });
+                                    }
+
+                                    this.menuItems.push({
+                                        id: Date.now() + Math.floor(Math.random() * 10000),
+                                        code: r.code || r['dish code'] || r['item code'] || `DISH${this.menuItems.length + 1}`,
+                                        name: name,
+                                        category: catId || 'all',
+                                        price: price,
+                                        desc: r.desc || r.description || 'Uploaded via CSV',
+                                        recipe: []
+                                    });
+                                    count++;
+                                }
+                            });
+                            this.saveLocalStorageBackup();
+                            this.showToast(`Imported ${count} menu items from CSV!`);
+                        } catch (err) {
+                            this.showToast('Failed to parse CSV file.');
+                        }
+                        event.target.value = '';
+                    };
+                    reader.readAsText(file);
+                },
+
+                uploadStockCSV(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const rows = this.parseCSV(e.target.result);
+                            let count = 0;
+                            rows.forEach(r => {
+                                const name = r.name || r['ingredient'] || r['item'] || r['ingredient name'];
+                                if (name) {
+                                    this.inventory.push({
+                                        id: Date.now() + Math.floor(Math.random() * 10000),
+                                        name: name,
+                                        unit: r.unit || 'kg',
+                                        qty: Number(r.qty || r.quantity || r.stock || 0),
+                                        unitCost: Number(r.unitcost || r['unit cost'] || r.cost || 0),
+                                        minStock: Number(r.minstock || r['min stock'] || 5)
+                                    });
+                                    count++;
+                                }
+                            });
+                            this.saveLocalStorageBackup();
+                            this.showToast(`Imported ${count} stock items from CSV!`);
+                        } catch (err) {
+                            this.showToast('Failed to parse CSV file.');
+                        }
+                        event.target.value = '';
+                    };
+                    reader.readAsText(file);
+                },
+
+                autoGenerateDishCode() {
+                    if (!this.newDishForm.name) return;
+                    const words = this.newDishForm.name.trim().split(/\s+/);
+                    let prefix = '';
+                    if (words.length === 1) {
+                        prefix = words[0].substring(0, 3).toUpperCase();
+                    } else {
+                        prefix = words.map(w => w[0]).join('').substring(0, 4).toUpperCase();
+                    }
+                    const count = this.menuItems.filter(m => m.code.startsWith(prefix)).length + 1;
+                    const numStr = count < 10 ? `0${count}` : `${count}`;
+                    this.newDishForm.code = `${prefix}${numStr}`;
+                },
+
                 saveNewDish() {
                     if (!this.newDishForm.name || !this.newDishForm.price) return;
+                    const defaultCat = (this.categories.find(c => c.id !== 'all') || {}).id || 'all';
                     this.menuItems.push({
                         id: Date.now(),
                         code: this.newDishForm.code || `DISH${this.menuItems.length + 1}`,
                         name: this.newDishForm.name,
-                        category: this.newDishForm.category,
+                        category: this.newDishForm.category || defaultCat,
                         price: Number(this.newDishForm.price),
                         desc: this.newDishForm.desc || 'Fresh item',
                         recipe: []
                     });
 
-                    this.newDishForm = { name: '', code: '', category: 'fastfood', price: null, desc: '' };
+                    this.newDishForm = { name: '', code: '', category: '', price: null, desc: '' };
                     this.saveLocalStorageBackup();
                     this.showToast('New dish added to menu!');
+                },
+
+                openEditDish(item) {
+                    this.editDishForm = {
+                        id: item.id,
+                        name: item.name,
+                        code: item.code,
+                        category: item.category,
+                        price: item.price,
+                        desc: item.desc
+                    };
+                    this.showEditDishModal = true;
+                },
+
+                updateDish() {
+                    const item = this.menuItems.find(m => m.id === this.editDishForm.id);
+                    if (item) {
+                        item.name = this.editDishForm.name;
+                        item.code = this.editDishForm.code;
+                        item.category = this.editDishForm.category;
+                        item.price = Number(this.editDishForm.price);
+                        item.desc = this.editDishForm.desc;
+                        this.saveLocalStorageBackup();
+                        this.showToast('Menu item updated!');
+                    }
+                    this.showEditDishModal = false;
                 },
 
                 deleteMenuItem(id) {
@@ -1521,7 +1922,7 @@
                     this.activeCustomerAddress = '';
                     this.cashTendered = null;
                     this.currentOrderId = (parseInt(this.currentOrderId) + 1).toString();
-                    
+
                     this.saveLocalStorageBackup();
                     this.showToast('Paid Order Completed!');
                 },
