@@ -39,11 +39,11 @@ def main():
     server_thread.start()
 
     url = f"http://127.0.0.1:{port}/index.html"
-    print(f"Mughal-E-Azam POS server running locally at {url}")
+    print(f"MUGHAL-E-AZAM - Restaurant server running locally at {url}")
 
     # Launch PyWebView Window
     webview.create_window(
-        title="Mughal-E-Azam - Advanced Neumorphic POS System",
+        title="MUGHAL-E-AZAM - Restaurant",
         url=url,
         width=1280,
         height=800,
