@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mughal-E-Azam - Advanced Neumorphic POS System</title>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwindcss.js"></script>
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/fontawesome.all.min.css">
     <!-- Google Fonts - Inter & Cinzel -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Cinzel:wght@600;700;800&display=swap" rel="stylesheet">
+    <link href="assets/css/fonts.css" rel="stylesheet">
     <!-- Vue 3 CDN -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="assets/js/vue.global.js"></script>
 
     <script>
         tailwind.config = {
@@ -258,7 +258,7 @@
                     </div>
                     <div class="text-[10px] text-neu-muted">{{ currentTime }}</div>
                 </div>
-                
+
                 <button @click="logout" class="w-9 h-9 rounded-xl neu-button flex items-center justify-center text-neu-muted hover:text-neu-accent transition" title="Sign Out">
                     <i class="fa-solid fa-power-off"></i>
                 </button>
@@ -395,7 +395,7 @@
                                 <span v-if="item.category === 'fastfood'" class="text-[9px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-bold">FAST FOOD</span>
                                 <span v-else class="text-[9px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-bold">NO DISC</span>
                             </div>
-                            
+
                             <div>
                                 <h3 class="font-semibold text-sm text-white group-hover:text-neu-accent transition mb-1">{{ item.name }}</h3>
                                 <p class="text-[11px] text-neu-muted line-clamp-2 mb-3">{{ item.desc }}</p>
@@ -447,12 +447,12 @@
                         <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-1.5">
                             Customer Profile (Auto-Save CRM & Autocomplete)
                         </span>
-                        
+
                         <div class="space-y-2">
                             <div class="relative">
                                 <input type="text" v-model="activeCustomerName" @input="handleCustomerSearch('name')" placeholder="Customer Name (e.g. Ali Khan)"
                                     class="w-full neu-input text-xs text-white p-2 rounded-xl outline-none">
-                                
+
                                 <div v-if="customerSuggestions.length > 0" class="absolute z-30 left-0 right-0 top-full mt-1 bg-[#1e2026] neu-flat border border-[#2a2d38] rounded-xl overflow-hidden shadow-2xl max-h-40 overflow-y-auto">
                                     <div v-for="c in customerSuggestions" :key="c.id" @click="applyCustomerProfile(c)" class="p-2 hover:bg-neu-accent/20 cursor-pointer text-xs border-b border-[#252733] flex justify-between">
                                         <div>
@@ -956,9 +956,9 @@
 
                 <div class="space-y-4 text-xs">
                     <p class="text-neu-muted text-[11px]">Discounts apply strictly to Fast Food category items.</p>
-                    
+
                     <div class="grid grid-cols-4 gap-2">
-                        <button v-for="pct in [5, 10, 15, 20]" :key="pct" @click="discountPercent = pct" 
+                        <button v-for="pct in [5, 10, 15, 20]" :key="pct" @click="discountPercent = pct"
                             :class="discountPercent === pct ? 'bg-neu-accent text-white font-bold' : 'neu-button text-neu-muted'"
                             class="py-2.5 rounded-xl text-xs">
                             {{ pct }}%
@@ -1276,15 +1276,15 @@
                     ],
 
                     menuItems: [
-                        { 
+                        {
                             id: 1, code: 'FF01', name: 'Royal Zinger Burger', category: 'fastfood', price: 480, desc: 'Crispy fried chicken breast fillet in soft bun',
                             recipe: [{ ingredientId: 1, qty: 1 }, { ingredientId: 2, qty: 0.2 }, { ingredientId: 3, qty: 0.05 }]
                         },
-                        { 
+                        {
                             id: 2, code: 'BBQ01', name: 'Chicken Tikka Boti', category: 'bbq', price: 650, desc: 'Smoky spiced chargrilled chicken boti',
                             recipe: [{ ingredientId: 2, qty: 0.35 }]
                         },
-                        { 
+                        {
                             id: 3, code: 'DRK01', name: 'Cold Drink Bottle 1.5L', category: 'drinks', price: 180, desc: 'Chilled beverage',
                             recipe: []
                         }
@@ -1636,7 +1636,7 @@
                     this.deliveryFee = 0;
                     this.cashTendered = null;
                     this.currentOrderId = (parseInt(this.currentOrderId) + 1).toString();
-                    
+
                     this.saveLocalStorageBackup();
                     this.showToast('Paid Order Completed & Inventory Deducted!');
                 },
