@@ -1723,8 +1723,7 @@
                     loginError: '',
 
                     users: [
-                        { name: 'Shehenshah A.', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] },
-                        { name: 'Tariq Cashier', username: 'cashier', password: '123', role: 'Cashier', permissions: ['pos', 'tables', 'history'] }
+                        { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
                     ],
 
                     currentTab: 'pos', // Terminal set as default main page
@@ -1797,25 +1796,9 @@
                         { id: 'all', name: 'All Items', icon: '👑', allowDiscount: false }
                     ],
 
-                    inventory: [
-                        { id: 1, name: 'Burger Buns', unit: 'pcs', qty: 100, unitCost: 25, minStock: 20 },
-                        { id: 2, name: 'Chicken Meat', unit: 'kg', qty: 50, unitCost: 650, minStock: 5 }
-                    ],
+                    inventory: [],
 
-                    menuItems: [
-                        {
-                            id: 1, code: 'FF01', name: 'Royal Zinger Burger', category: 'fastfood', price: 480, desc: 'Crispy fried chicken breast fillet in soft bun',
-                            recipe: [{ ingredientId: 1, qty: 1 }, { ingredientId: 2, qty: 0.2 }]
-                        },
-                        {
-                            id: 2, code: 'BBQ01', name: 'Chicken Tikka Boti', category: 'bbq', price: 650, desc: 'Smoky spiced chargrilled chicken boti',
-                            recipe: [{ ingredientId: 2, qty: 0.35 }]
-                        },
-                        {
-                            id: 3, code: 'DRK01', name: 'Cold Drink Bottle 1.5L', category: 'drinks', price: 180, desc: 'Chilled beverage',
-                            recipe: []
-                        }
-                    ],
+                    menuItems: [],
 
                     cart: [],
 
