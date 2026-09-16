@@ -1702,13 +1702,6 @@
             </div>
         </div>
 
-        <!-- Toast Notifications -->
-        <transition name="fade">
-            <div v-if="toastMessage" class="fixed bottom-6 right-6 bg-neu-accent text-white text-xs px-5 py-3 rounded-2xl neu-accent-glow font-bold z-50 flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>{{ toastMessage }}</span>
-            </div>
-        </transition>
 
     </div>
 
@@ -2655,8 +2648,7 @@
                 },
 
                 showToast(msg) {
-                    this.toastMessage = msg;
-                    setTimeout(() => { this.toastMessage = ''; }, 3000);
+                    // Toast notifications disabled per user request
                 }
             }
         }).mount('#app');
