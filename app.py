@@ -145,35 +145,7 @@ class Api:
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
             return {'status': 'error', 'message': 'Select a system printer first.'}
-        # Keep the job short: no page-sized padding or trailing blank lines.  Thermal
-        # printers feed after the last line only enough to perform the cut command.
-        lines = [
-            receipt_data.get('header', 'MUGHAL-E-AZAM RESTAURANT'),
-            receipt_data.get('title', 'RECEIPT'),
-            '-' * 32,
-            f"Order: {receipt_data.get('orderId', '')}",
-        ]
-        if receipt_data.get('time'):
-            lines.append(f"Time: {receipt_data['time']}")
-        if receipt_data.get('tableName'):
-            lines.append(f"Table: {receipt_data['tableName']}")
-        if receipt_data.get('customerName'):
-            lines.append(f"Customer: {receipt_data['customerName']}")
-        lines.append('-' * 32)
-        for item in receipt_data.get('items', []):
-            quantity = item.get('qty', 1)
-            name = item.get('name', '')
-            amount = item.get('price', 0) * quantity
-            lines.append(f'{quantity}x {name}  Rs.{amount}')
-        lines.extend([
-            '-' * 32,
-            f"Subtotal: Rs.{receipt_data.get('subtotal', 0)}",
-            f"Discount: Rs.{receipt_data.get('discount', 0)}" if receipt_data.get('discount', 0) else '',
-            f"Delivery: Rs.{receipt_data.get('deliveryFee', 0)}" if receipt_data.get('deliveryFee', 0) else '',
-            f"TOTAL: Rs.{receipt_data.get('grandTotal', 0)}",
-            receipt_data.get('receiptFooter', ''),
-        ])
-        text = '\n'.join(line for line in lines if line) + '\n'
+        text = f"{receipt_data.get('title', 'RECEIPT')}\nOrder: {receipt_data.get('orderId', '')}\n\n\n"
         try:
             if sys.platform == 'win32':
                 import win32print
