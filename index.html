@@ -2490,15 +2490,18 @@
                                 header: this.printerConfig.receiptHeader,
                                 receiptFooter: this.printerConfig.receiptFooter
                             };
-                            await window.pywebview.api.print_direct(target, payload);
+                            const result = await window.pywebview.api.print_direct(target, payload);
+                            if (result.status !== 'success') {
+                                this.showToast(result.message || 'Printer did not accept the job.');
+                            }
                             return;
                         } catch (e) {
-                            console.error('Silent pywebview print error, falling back to window.print():', e);
+                            console.error('Silent pywebview print error:', e);
+                            this.showToast('Print failed. Check the selected printer and its connection.');
+                            return;
                         }
                     }
-                    this.$nextTick(() => {
-                        window.print();
-                    });
+                    this.showToast('Native printer service is unavailable. No browser print dialog was opened.');
                 },
 
                 reprintHistoricalReceipt(orderRecord) {
