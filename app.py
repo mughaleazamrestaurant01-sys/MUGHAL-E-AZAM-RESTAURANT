@@ -48,18 +48,15 @@ class Api:
     def __init__(self, database_path):
         self.database_path = database_path
         self.window = None
-        self._lock = threading.RLock()
         self._initialize_database()
 
     def _connection(self):
-        connection = sqlite3.connect(self.database_path, timeout=10)
+        connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
-        connection.execute('PRAGMA busy_timeout = 10000')
         return connection
 
     def _initialize_database(self):
-        with self._lock, self._connection() as db:
-            db.execute('PRAGMA journal_mode = WAL')
+        with self._connection() as db:
             db.execute('''CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL, role TEXT NOT NULL, name TEXT NOT NULL,
@@ -68,7 +65,7 @@ class Api:
             db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
 
     def _backup_after_write(self):
-        with self._lock, self._connection() as db:
+        with self._connection() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'backup_directory'").fetchone()
         if not row or not row['value']:
             return
@@ -96,7 +93,7 @@ class Api:
         if not username or not user.get('password') or not user.get('name'):
             return {'ok': False, 'error': 'Name, username, and password are required.'}
         try:
-            with self._lock, self._connection() as db:
+            with self._connection() as db:
                 if user_id is None:
                     cursor = db.execute('INSERT INTO users (username, password, role, name, permissions) VALUES (?, ?, ?, ?, ?)',
                         (username, user['password'], user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', []))))
@@ -110,11 +107,10 @@ class Api:
             return {'ok': False, 'error': 'That username already exists.'}
 
     def delete_user(self, user_id):
-        with self._lock:
-            with self._connection() as db:
-                db.execute('DELETE FROM users WHERE id = ?', (user_id,))
-            self._backup_after_write()
-            return {'ok': True, 'users': self.list_users()}
+        with self._connection() as db:
+            db.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        self._backup_after_write()
+        return {'ok': True, 'users': self.list_users()}
 
     def load_state(self):
         with self._connection() as db:
@@ -124,11 +120,10 @@ class Api:
     def save_state(self, state):
         # Users are intentionally excluded: they always use direct SQL writes above.
         state.pop('users', None)
-        with self._lock:
-            with self._connection() as db:
-                db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                           (json.dumps(state),))
-            self._backup_after_write()
+        with self._connection() as db:
+            db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (json.dumps(state),))
+        self._backup_after_write()
         return {'ok': True}
 
     def get_system_printers(self):
@@ -150,35 +145,7 @@ class Api:
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
             return {'status': 'error', 'message': 'Select a system printer first.'}
-        # Keep the job short: no page-sized padding or trailing blank lines.  Thermal
-        # printers feed after the last line only enough to perform the cut command.
-        lines = [
-            receipt_data.get('header', 'MUGHAL-E-AZAM RESTAURANT'),
-            receipt_data.get('title', 'RECEIPT'),
-            '-' * 32,
-            f"Order: {receipt_data.get('orderId', '')}",
-        ]
-        if receipt_data.get('time'):
-            lines.append(f"Time: {receipt_data['time']}")
-        if receipt_data.get('tableName'):
-            lines.append(f"Table: {receipt_data['tableName']}")
-        if receipt_data.get('customerName'):
-            lines.append(f"Customer: {receipt_data['customerName']}")
-        lines.append('-' * 32)
-        for item in receipt_data.get('items', []):
-            quantity = item.get('qty', 1)
-            name = item.get('name', '')
-            amount = item.get('price', 0) * quantity
-            lines.append(f'{quantity}x {name}  Rs.{amount}')
-        lines.extend([
-            '-' * 32,
-            f"Subtotal: Rs.{receipt_data.get('subtotal', 0)}",
-            f"Discount: Rs.{receipt_data.get('discount', 0)}" if receipt_data.get('discount', 0) else '',
-            f"Delivery: Rs.{receipt_data.get('deliveryFee', 0)}" if receipt_data.get('deliveryFee', 0) else '',
-            f"TOTAL: Rs.{receipt_data.get('grandTotal', 0)}",
-            receipt_data.get('receiptFooter', ''),
-        ])
-        text = '\n'.join(line for line in lines if line) + '\n'
+        text = f"{receipt_data.get('title', 'RECEIPT')}\nOrder: {receipt_data.get('orderId', '')}\n\n\n"
         try:
             if sys.platform == 'win32':
                 import win32print

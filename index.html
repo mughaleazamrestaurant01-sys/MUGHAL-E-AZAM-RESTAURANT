@@ -1817,7 +1817,6 @@
                 return {
                     currentUser: null,
                     bootReady: false,
-                    bootError: '',
                     loginForm: { username: '', password: '' },
                     loginError: '',
 
@@ -2094,10 +2093,12 @@
                 }
             },
 
-            mounted() {
+            async mounted() {
                 this.updateClock();
                 setInterval(this.updateClock, 1000);
-                this.startBoot();
+                await this.loadPersistentData();
+                await this.detectSystemPrinters();
+                this.bootReady = true;
             },
 
             methods: {
