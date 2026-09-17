@@ -130,43 +130,9 @@
 
     <div id="app" class="h-full flex flex-col bg-[#16171b]">
 
-        <!-- Authentication & Owner First-Time Setup Screen -->
-        <div v-if="!currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
-            <!-- Case 1: First Time Setup (No Users Set) -->
-            <div v-if="users.length === 0" class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
-                <img src="assets/images/logo.jpg" alt="Mughal-E-Azam Logo" class="w-20 h-24 mx-auto rounded-3xl border-2 border-amber-400 object-cover mb-3 shadow-lg">
-
-                <h2 class="font-royal text-2xl font-bold tracking-wider text-white">SYSTEM OWNER SETUP</h2>
-                <p class="text-xs text-neu-muted mb-6">First time initialization: Set your main Master Owner Admin credentials</p>
-
-                <form @submit.prevent="saveInitialOwnerSetup" class="space-y-4 text-left">
-                    <div>
-                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Owner Display Name</label>
-                        <input type="text" v-model="initialOwnerForm.name" placeholder="e.g. Restaurant Owner" required
-                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
-                    </div>
-
-                    <div>
-                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Main Admin Username</label>
-                        <input type="text" v-model="initialOwnerForm.username" placeholder="Create username (e.g. owner)" required
-                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
-                    </div>
-
-                    <div>
-                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Main Admin Password</label>
-                        <input type="password" v-model="initialOwnerForm.password" placeholder="Create password" required
-                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
-                    </div>
-
-                    <button type="submit" class="w-full py-3.5 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow hover:bg-neu-accentHover transition mt-2 flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-crown"></i>
-                        <span>Save Owner Admin Account & Launch</span>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Case 2: Standard Login Screen -->
-            <div v-else class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
+        <!-- Authentication Screen (Only when users exist and not logged in) -->
+        <div v-if="users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
                 <img src="assets/images/logo.jpg" alt="Mughal-E-Azam Logo" class="w-24 h-24 mx-auto rounded-3xl border-2 border-amber-400 object-cover mb-4 shadow-lg">
 
                 <h2 class="font-royal text-2xl font-bold tracking-wider text-white">MUGHAL-E-AZAM</h2>
@@ -206,7 +172,7 @@
 
 
         <!-- Main Header Bar -->
-        <header v-if="currentUser" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
+        <header v-if="currentUser || users.length === 0" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
             <!-- Top Branding & User Info Row -->
             <div class="h-16 px-6 flex items-center justify-between border-b border-[#252730]/60">
                 <div class="flex items-center space-x-3">
@@ -220,13 +186,13 @@
                 <div class="flex items-center space-x-3">
                     <div class="text-right pl-2 border-l border-[#2c2f3b]">
                         <div class="text-xs font-bold text-white flex items-center justify-end space-x-1">
-                            <span>{{ currentUser.name }}</span>
-                            <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-neu-accent/20 text-neu-accent ml-1">{{ currentUser.role }}</span>
+                            <span>{{ currentUser ? currentUser.name : 'System Owner' }}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-neu-accent/20 text-neu-accent ml-1">{{ currentUser ? currentUser.role : 'Admin' }}</span>
                         </div>
                         <div class="text-[10px] text-neu-muted">{{ currentTime }}</div>
                     </div>
 
-                    <button @click="logout" class="w-9 h-9 rounded-xl neu-button flex items-center justify-center text-neu-muted hover:text-neu-accent transition" title="Sign Out">
+                    <button v-if="currentUser" @click="logout" class="w-9 h-9 rounded-xl neu-button flex items-center justify-center text-neu-muted hover:text-neu-accent transition" title="Sign Out">
                         <i class="fa-solid fa-power-off"></i>
                     </button>
                 </div>
@@ -302,7 +268,7 @@
             </div>
         </header>
 
-        <main v-if="currentUser" class="flex-1 overflow-hidden relative">
+        <main v-if="currentUser || users.length === 0" class="flex-1 overflow-hidden relative">
             <!-- Admin Panel Dedicated Page Tab -->
             <div v-show="currentTab === 'admin' && hasPermission('admin_dash')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262832]">
@@ -1826,7 +1792,6 @@
                     currentUser: null,
                     loginForm: { username: '', password: '' },
                     loginError: '',
-                    initialOwnerForm: { name: '', username: '', password: '' },
 
                     users: [],
 
@@ -1847,16 +1812,11 @@
                     activeCustomerAddress: '',
                     deliveryFeeInput: null,
 
-                    availablePrinters: [
-                        'Default System Printer',
-                        'Thermal Counter POS Printer (80mm)',
-                        'Kitchen Ticket Printer (80mm)',
-                        'Counter Bill Printer'
-                    ],
+                    availablePrinters: [],
 
                     printerConfig: {
-                        counterPrinterName: 'Thermal Counter POS Printer (80mm)',
-                        kitchenPrinterName: 'Kitchen Ticket Printer (80mm)',
+                        counterPrinterName: '',
+                        kitchenPrinterName: '',
                         receiptHeader: 'MUGHAL-E-AZAM - RESTAURANT',
                         receiptFooter: 'Thank you for dining at Mughal-E-Azam - Restaurant!',
                         autoPrintKitchen: true
@@ -2095,6 +2055,7 @@
                 this.updateClock();
                 setInterval(this.updateClock, 1000);
                 this.loadLocalStorageBackup();
+                this.detectSystemPrinters();
 
                 window.addEventListener('beforeunload', () => {
                     this.saveLocalStorageBackup();
@@ -2816,23 +2777,6 @@
                     reader.readAsText(file);
                 },
 
-                saveInitialOwnerSetup() {
-                    if (!this.initialOwnerForm.username.trim() || !this.initialOwnerForm.password.trim()) return;
-                    const newOwner = {
-                        id: Date.now(),
-                        name: this.initialOwnerForm.name.trim() || 'Restaurant Owner',
-                        username: this.initialOwnerForm.username.trim(),
-                        password: this.initialOwnerForm.password.trim(),
-                        role: 'Admin',
-                        permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash']
-                    };
-                    this.users = [newOwner];
-                    this.currentUser = newOwner;
-                    this.initialOwnerForm = { name: '', username: '', password: '' };
-                    this.saveLocalStorageBackup();
-                    this.showToast('Owner account created successfully!');
-                },
-
                 handleLogin() {
                     const inputUsername = (this.loginForm.username || '').trim().toLowerCase();
                     const inputPassword = (this.loginForm.password || '').trim();
@@ -2860,7 +2804,8 @@
                 },
 
                 hasPermission(perm) {
-                    return this.currentUser && this.currentUser.permissions.includes(perm);
+                    if (this.users.length === 0) return true;
+                    return this.currentUser && this.currentUser.permissions && this.currentUser.permissions.includes(perm);
                 },
 
                 advanceKdsStatus(order) {
