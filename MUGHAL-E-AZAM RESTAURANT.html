@@ -1823,19 +1823,12 @@
         createApp({
             data() {
                 return {
-                    currentUser: {
-                        name: 'System Administrator',
-                        username: 'admin',
-                        role: 'Admin',
-                        permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash']
-                    },
+                    currentUser: null,
                     loginForm: { username: '', password: '' },
                     loginError: '',
                     initialOwnerForm: { name: '', username: '', password: '' },
 
-                    users: [
-                        { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
-                    ],
+                    users: [],
 
                     currentTab: 'pos', // Terminal set as default main page
                     searchQuery: '',
@@ -2199,6 +2192,21 @@
 
                     this.kdsOrders.unshift(newTicket);
                     this.showToast(`Order #${this.currentOrderId} sent to Kitchen Queue!`);
+                    if (this.printerConfig.autoPrintKitchen) {
+                        this.triggerThermalPrint({
+                            title: 'KITCHEN TICKET (KOT)',
+                            orderId: this.currentOrderId,
+                            time: this.currentTime,
+                            tableName: this.selectedTable ? this.selectedTable.name : '',
+                            customerName: this.activeCustomerName,
+                            items: this.cart,
+                            subtotal: this.subtotal,
+                            discount: this.totalDiscountAmount,
+                            deliveryFee: this.deliveryCharges,
+                            tax: 0,
+                            grandTotal: this.grandTotal
+                        }, this.printerConfig.kitchenPrinterName);
+                    }
                     this.saveLocalStorageBackup();
                 },
 
@@ -2501,8 +2509,22 @@
                     this.showToast('Paid Order Completed!');
                 },
 
-                triggerThermalPrint(data) {
+                async triggerThermalPrint(data, targetPrinter) {
                     this.printableReceipt = data;
+                    const target = targetPrinter || this.printerConfig.counterPrinterName;
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.print_direct) {
+                        try {
+                            const payload = {
+                                ...data,
+                                header: this.printerConfig.receiptHeader,
+                                receiptFooter: this.printerConfig.receiptFooter
+                            };
+                            await window.pywebview.api.print_direct(target, payload);
+                            return;
+                        } catch (e) {
+                            console.error('Silent pywebview print error, falling back to window.print():', e);
+                        }
+                    }
                     this.$nextTick(() => {
                         window.print();
                     });
@@ -2730,7 +2752,9 @@
                         const saved = localStorage.getItem('mughal_pos_backup');
                         if (saved) {
                             const parsed = JSON.parse(saved);
-                            if (parsed.users) this.users = parsed.users;
+                            if (parsed.users && parsed.users.length > 0) {
+                                this.users = parsed.users;
+                            }
                             if (parsed.orderHistory) this.orderHistory = parsed.orderHistory;
                             if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
                             if (parsed.customers) this.customers = parsed.customers;
@@ -2810,7 +2834,9 @@
                 },
 
                 handleLogin() {
-                    const found = this.users.find(u => u.username === this.loginForm.username && u.password === this.loginForm.password);
+                    const inputUsername = (this.loginForm.username || '').trim().toLowerCase();
+                    const inputPassword = (this.loginForm.password || '').trim();
+                    const found = this.users.find(u => (u.username || '').trim().toLowerCase() === inputUsername && u.password === inputPassword);
                     if (found) {
                         this.currentUser = found;
                         this.loginError = '';
