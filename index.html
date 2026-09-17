@@ -95,6 +95,11 @@
             background: #ff4d5a;
         }
 
+        @page {
+            size: auto;
+            margin: 0mm;
+        }
+
         @media print {
             body * {
                 visibility: hidden !important;
@@ -107,9 +112,14 @@
                 left: 0 !important;
                 top: 0 !important;
                 width: 80mm !important;
+                height: fit-content !important;
+                max-height: fit-content !important;
+                overflow: hidden !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
                 color: black !important;
                 background: white !important;
-                padding: 10px !important;
+                padding: 5px 10px !important;
                 font-family: 'Courier New', Courier, monospace !important;
                 font-size: 11px !important;
             }
@@ -161,17 +171,18 @@
                 <div class="mt-8 pt-6 border-t border-[#23252d]">
                     <p class="text-[11px] text-neu-muted mb-3 font-semibold uppercase tracking-wider">Quick Demo Login</p>
                     <div class="grid grid-cols-2 gap-2 text-xs">
-                        <button @click="quickLogin('admin')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
+                        <button type="button" @click="quickLogin('admin')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
                             <span class="font-bold text-white text-xs"><i class="fa-solid fa-shield-halved text-neu-accent mr-1"></i> Admin</span>
                             <span class="text-[10px] text-neu-muted">Full Access</span>
                         </button>
-                        <button @click="quickLogin('cashier')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
+                        <button type="button" @click="quickLogin('cashier')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
                             <span class="font-bold text-white text-xs"><i class="fa-solid fa-cash-register text-emerald-400 mr-1"></i> Cashier</span>
                             <span class="text-[10px] text-neu-muted">POS Terminal</span>
                         </button>
                     </div>
                 </div>
             </div>
+        </div>
 
 
         <!-- Main Header Bar -->
@@ -234,6 +245,13 @@
                     <span>Stock</span>
                 </button>
 
+                <!-- Purchasing Tab -->
+                <button v-if="hasPermission('inventory')" @click="currentTab = 'purchasing'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'purchasing'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
+                    <i class="fa-solid fa-cart-flatbed text-emerald-400"></i>
+                    <span>Purchasing</span>
+                </button>
+
                 <!-- 5th Tab: Tables -->
                 <button v-if="hasPermission('tables')" @click="currentTab = 'tables'"
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'tables'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
@@ -285,11 +303,16 @@
                     <div class="flex items-center space-x-3">
                         <img src="assets/images/logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl border-2 border-yellow-400 object-cover shadow-md">
                         <div>
-                            <h2 class="text-xl font-bold font-royal text-white">Admin Panel - Daily Sales & Cash Analytics</h2>
-                            <p class="text-xs text-neu-muted">Real-time revenue, cash drawer balance, expense logging, payment breakdown & order channels</p>
+                            <h2 class="text-xl font-bold font-royal text-white">Admin Panel Management Control</h2>
+                            <p class="text-xs text-neu-muted">System control center: financial analytics, date filtering, user management & dual printers</p>
                         </div>
                     </div>
-                    <div class="flex space-x-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-2 bg-[#18191d] px-3 py-1.5 rounded-2xl neu-pressed">
+                            <i class="fa-solid fa-calendar-day text-neu-accent"></i>
+                            <span class="text-xs text-neu-muted font-bold">Analytics Date:</span>
+                            <input type="date" v-model="adminAnalyticsDate" class="neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                        </div>
                         <button @click="showOpeningBalanceModal = true" class="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-2xl text-xs font-bold flex items-center space-x-2">
                             <i class="fa-solid fa-vault"></i>
                             <span>Opening Cash: Rs. {{ dailyOpeningCash }}</span>
@@ -301,6 +324,46 @@
                     </div>
                 </div>
 
+                <!-- Admin Internal Sub-Navigation Bar -->
+                <div class="flex items-center space-x-2 border-b border-[#262832] pb-3 overflow-x-auto scrollbar-none text-xs">
+                    <button @click="adminSubTab = 'analytics'"
+                        :class="adminSubTab === 'analytics' ? 'bg-neu-accent text-white font-bold neu-accent-glow' : 'neu-button text-neu-muted'"
+                        class="px-4 py-2 rounded-xl flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Financial Analytics</span>
+                    </button>
+
+                    <button @click="adminSubTab = 'users'"
+                        :class="adminSubTab === 'users' ? 'bg-neu-accent text-white font-bold neu-accent-glow' : 'neu-button text-neu-muted'"
+                        class="px-4 py-2 rounded-xl flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-users-gear"></i>
+                        <span>User Management</span>
+                    </button>
+
+                    <button @click="adminSubTab = 'printers'"
+                        :class="adminSubTab === 'printers' ? 'bg-neu-accent text-white font-bold neu-accent-glow' : 'neu-button text-neu-muted'"
+                        class="px-4 py-2 rounded-xl flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-print"></i>
+                        <span>Dual Printers Setup</span>
+                    </button>
+
+                    <button @click="adminSubTab = 'cash'"
+                        :class="adminSubTab === 'cash' ? 'bg-neu-accent text-white font-bold neu-accent-glow' : 'neu-button text-neu-muted'"
+                        class="px-4 py-2 rounded-xl flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-vault"></i>
+                        <span>Opening Cash Control</span>
+                    </button>
+
+                    <button @click="adminSubTab = 'backup'"
+                        :class="adminSubTab === 'backup' ? 'bg-neu-accent text-white font-bold neu-accent-glow' : 'neu-button text-neu-muted'"
+                        class="px-4 py-2 rounded-xl flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-database"></i>
+                        <span>Backup & Restore</span>
+                    </button>
+                </div>
+
+                <!-- Sub-tab 1: Financial Analytics -->
+                <div v-show="adminSubTab === 'analytics'" class="space-y-6">
                 <!-- Primary Financial Metric Cards -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="neu-flat p-4 rounded-3xl border border-[#262833]">
@@ -409,8 +472,144 @@
                         </div>
                     </div>
                 </div>
+                </div>
+
+                <!-- Sub-tab 2: User & System Management -->
+                <div v-show="adminSubTab === 'users'" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-base font-bold text-white"><i class="fa-solid fa-users-gear text-neu-accent mr-2"></i>Multi-User Account & Roles Control</h3>
+                            <p class="text-xs text-neu-muted">Create cashiers & sub-admins with tailored access permissions for multi-terminal POS setup</p>
+                        </div>
+                        <button @click="openAddUserModal" class="px-4 py-2.5 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow flex items-center space-x-2">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>Create New User</span>
+                        </button>
+                    </div>
+
+                    <div class="neu-flat p-6 rounded-3xl border border-[#252833]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-neu-text">
+                                <thead class="bg-[#18191d] neu-pressed text-neu-muted uppercase text-[10px]">
+                                    <tr>
+                                        <th class="p-3 rounded-l-xl">User Name</th>
+                                        <th class="p-3">Username</th>
+                                        <th class="p-3">Role</th>
+                                        <th class="p-3">Granted Permissions</th>
+                                        <th class="p-3 text-right rounded-r-xl">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-[#252833]">
+                                    <tr v-for="(u, idx) in users" :key="idx" class="hover:bg-[#1f2129]">
+                                        <td class="p-3 font-bold text-white flex items-center space-x-2">
+                                            <i class="fa-solid fa-circle-user text-neu-accent"></i>
+                                            <span>{{ u.name }}</span>
+                                        </td>
+                                        <td class="p-3 font-mono text-amber-400">{{ u.username }}</td>
+                                        <td class="p-3">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="u.role === 'Admin' ? 'bg-neu-accent/20 text-neu-accent' : 'bg-blue-500/20 text-blue-400'">
+                                                {{ u.role }}
+                                            </span>
+                                        </td>
+                                        <td class="p-3">
+                                            <div class="flex flex-wrap gap-1">
+                                                <span v-for="p in u.permissions" :key="p" class="px-1.5 py-0.5 bg-[#18191d] text-neu-muted text-[9px] rounded font-mono border border-[#262833]">
+                                                    {{ p }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="p-3 text-right space-x-2">
+                                            <button @click="openEditUserModal(idx)" class="px-2.5 py-1 rounded-xl neu-button text-amber-400 hover:text-white text-xs">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button v-if="users.length > 1 && u.username !== 'admin'" @click="deleteUser(idx)" class="px-2.5 py-1 rounded-xl neu-button text-neu-accent hover:text-white text-xs">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 3: Hardware & Dual Printers Setup -->
+                <div v-show="adminSubTab === 'printers'" class="space-y-6">
+                    <div class="neu-flat p-6 rounded-3xl border border-[#252833] max-w-2xl">
+                        <h3 class="text-base font-bold text-white mb-4"><i class="fa-solid fa-print text-emerald-400 mr-2"></i>Hardware Dual Printer Configuration</h3>
+                        <div class="space-y-4 text-xs">
+                            <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
+                                <span class="font-bold text-emerald-400 block"><i class="fa-solid fa-receipt mr-1"></i>1. Counter & Customer Receipt Printer</span>
+                                <input type="text" v-model="printerConfig.counterPrinterName" placeholder="e.g. Thermal Counter POS Printer (80mm)" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            </div>
+
+                            <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
+                                <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Ticket Printer (KOT Queue)</span>
+                                <input type="text" v-model="printerConfig.kitchenPrinterName" placeholder="e.g. Kitchen Ticket Printer (80mm)" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            </div>
+
+                            <label class="flex items-center space-x-2 text-white font-semibold cursor-pointer pt-2">
+                                <input type="checkbox" v-model="printerConfig.autoPrintKitchen" class="rounded accent-neu-accent w-4 h-4">
+                                <span>Auto-send receipt to Kitchen Printer when order placed</span>
+                            </label>
+
+                            <button @click="savePrinterSettings" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save Hardware Printer Setup</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 4: Cash & Expense Control -->
+                <div v-show="adminSubTab === 'cash'" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <h3 class="text-base font-bold text-white"><i class="fa-solid fa-vault text-amber-400 mr-2"></i>Daily Opening Cash Base</h3>
+                            <div class="space-y-3 text-xs">
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Opening Cash Balance (Rs.)</label>
+                                    <input type="number" v-model.number="dailyOpeningCash" class="w-full neu-input p-3 rounded-xl text-amber-400 font-bold text-base outline-none">
+                                </div>
+                                <button @click="saveOpeningCash" class="w-full py-3 bg-amber-500 text-white font-bold rounded-xl shadow">Save Opening Cash Base</button>
+                            </div>
+                        </div>
+
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <h3 class="text-base font-bold text-white"><i class="fa-solid fa-file-invoice-dollar text-neu-accent mr-2"></i>Log New Store Expense</h3>
+                            <form @submit.prevent="saveExpense" class="space-y-3 text-xs">
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Expense Title</label>
+                                    <input type="text" v-model="newExpenseForm.title" placeholder="e.g. Utility Bill / Supplies" required class="w-full neu-input p-3 rounded-xl text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Amount (Rs.)</label>
+                                    <input type="number" v-model.number="newExpenseForm.amount" required class="w-full neu-input p-3 rounded-xl text-white outline-none">
+                                </div>
+                                <button type="submit" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Record Store Expense</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 5: System Backup & Restore -->
+                <div v-show="adminSubTab === 'backup'" class="space-y-6">
+                    <div class="neu-flat p-6 rounded-3xl border border-[#252833] max-w-2xl space-y-4">
+                        <h3 class="text-base font-bold text-white"><i class="fa-solid fa-database text-blue-400 mr-2"></i>Database Export & Import</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
+                                <span class="font-bold text-white block">Download System JSON Backup</span>
+                                <p class="text-[10px] text-neu-muted">Exports all menu items, inventory, transactions, customers & users.</p>
+                                <button @click="exportBackupFile" class="w-full py-2.5 bg-blue-500 text-white font-bold rounded-xl shadow">Export Backup File</button>
+                            </div>
+
+                            <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
+                                <span class="font-bold text-amber-400 block">Restore System Data File</span>
+                                <p class="text-[10px] text-neu-muted">Imports POS data from previously saved JSON backup file.</p>
+                                <input type="file" ref="restoreFileInput" accept=".json" @change="importRestoreFile" class="w-full text-neu-muted text-xs pt-1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-        </div>
 
             <!-- Terminal Tab (Default Main View) -->
             <div v-show="currentTab === 'pos' && hasPermission('pos')" class="h-full flex flex-col md:flex-row p-4 gap-4">
@@ -781,6 +980,136 @@
                 </div>
             </div>
 
+            <!-- Purchasing Tab Module -->
+            <div v-show="currentTab === 'purchasing' && hasPermission('inventory')" class="h-full p-6 overflow-y-auto space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold font-royal text-white">Stock Purchasing & Supply Logging</h2>
+                        <p class="text-xs text-neu-muted">Search stock ingredients, log newly bought inventory supplies, and auto-update stock levels</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Form: Record New Purchased Stock -->
+                    <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                            <i class="fa-solid fa-cart-plus text-emerald-400"></i>
+                            <span>Record Purchased Supply</span>
+                        </h3>
+
+                        <form @submit.prevent="recordStockPurchase" class="space-y-3 text-xs">
+                            <div>
+                                <label class="text-neu-muted block mb-1">Select Ingredient Item</label>
+                                <select v-model="purchaseForm.ingredientId" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option value="" disabled>Choose stock item...</option>
+                                    <option v-for="ing in inventory" :key="ing.id" :value="ing.id">
+                                        {{ ing.name }} (Current: {{ ing.qty }} {{ ing.unit }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Purchased Qty</label>
+                                    <input type="number" step="0.01" min="0.01" v-model.number="purchaseForm.qty" placeholder="Qty added" required class="w-full neu-input p-2.5 rounded-xl text-emerald-400 font-bold outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Unit Cost (Rs.)</label>
+                                    <input type="number" min="0" v-model.number="purchaseForm.unitCost" placeholder="Unit cost" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-neu-muted block mb-1">Supplier / Notes</label>
+                                <input type="text" v-model="purchaseForm.supplier" placeholder="e.g. Metro WholeSale / Invoice #102" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            </div>
+
+                            <button type="submit" class="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl shadow hover:bg-emerald-600 transition mt-2 flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-square-plus"></i>
+                                <span>Record Purchase & Update Real Stock</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right Column: Search Stock & Purchase History Log -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <!-- Search & Quick Inventory View Card -->
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                                <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                                    <i class="fa-solid fa-boxes-stacked text-amber-400"></i>
+                                    <span>Stock Item Lookup</span>
+                                </h3>
+                                <div class="relative w-full sm:w-64">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-neu-muted text-xs"></i>
+                                    <input type="text" v-model="purchaseSearchQuery" placeholder="Search ingredient name..." class="w-full neu-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white outline-none">
+                                </div>
+                            </div>
+
+                            <div class="overflow-x-auto max-h-48 overflow-y-auto">
+                                <table class="w-full text-left text-xs text-neu-text">
+                                    <thead class="bg-[#18191d] neu-pressed text-neu-muted uppercase text-[10px]">
+                                        <tr>
+                                            <th class="p-2.5 rounded-l-xl">Ingredient Name</th>
+                                            <th class="p-2.5">Current Real Stock</th>
+                                            <th class="p-2.5">Unit</th>
+                                            <th class="p-2.5 rounded-r-xl">Current Cost (Rs.)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-[#252833]">
+                                        <tr v-for="item in filteredPurchaseStockItems" :key="item.id" class="hover:bg-[#1f2129]">
+                                            <td class="p-2.5 font-bold text-white">{{ item.name }}</td>
+                                            <td class="p-2.5 font-bold" :class="item.qty <= item.minStock ? 'text-neu-accent' : 'text-emerald-400'">
+                                                {{ item.qty }}
+                                            </td>
+                                            <td class="p-2.5 text-neu-muted">{{ item.unit }}</td>
+                                            <td class="p-2.5 text-white">Rs. {{ item.unitCost }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Purchased Supplies History Table -->
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                                <i class="fa-solid fa-clock-rotate-left text-blue-400"></i>
+                                <span>Recent Purchase History Log</span>
+                            </h3>
+
+                            <div v-if="purchaseHistory.length === 0" class="p-6 text-center text-neu-muted text-xs">
+                                No purchases recorded yet.
+                            </div>
+
+                            <div v-else class="overflow-x-auto max-h-56 overflow-y-auto">
+                                <table class="w-full text-left text-xs text-neu-text">
+                                    <thead class="bg-[#18191d] neu-pressed text-neu-muted uppercase text-[10px]">
+                                        <tr>
+                                            <th class="p-2.5 rounded-l-xl">Date & Time</th>
+                                            <th class="p-2.5">Item Name</th>
+                                            <th class="p-2.5">Qty Added</th>
+                                            <th class="p-2.5">Unit Cost</th>
+                                            <th class="p-2.5">Total Expense</th>
+                                            <th class="p-2.5 rounded-r-xl">Supplier / Note</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-[#252833]">
+                                        <tr v-for="p in purchaseHistory" :key="p.id" class="hover:bg-[#1f2129]">
+                                            <td class="p-2.5 text-neu-muted font-mono text-[11px]">{{ p.date }} {{ p.time }}</td>
+                                            <td class="p-2.5 font-bold text-white">{{ p.itemName }}</td>
+                                            <td class="p-2.5 font-bold text-emerald-400">+{{ p.qty }} {{ p.unit }}</td>
+                                            <td class="p-2.5 text-white">Rs. {{ p.unitCost }}</td>
+                                            <td class="p-2.5 font-bold text-amber-400">Rs. {{ p.qty * p.unitCost }}</td>
+                                            <td class="p-2.5 text-neu-muted">{{ p.supplier || 'N/A' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- History Tab -->
             <div v-show="currentTab === 'history' && hasPermission('history')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -883,14 +1212,14 @@
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     <div v-for="table in tables" :key="table.id" @click="selectTable(table)"
                         :class="[
-                            table.status === 'Occupied' ? 'border-neu-accent/50 bg-[#251b22]' : 'border-transparent',
+                            table.status === 'Occupied' ? 'border-neu-accent/50 bg-[#251b22] opacity-75 cursor-not-allowed' : 'border-transparent cursor-pointer hover:scale-[1.02]',
                             selectedTable && selectedTable.id === table.id ? 'ring-2 ring-neu-accent' : ''
                         ]"
-                        class="neu-flat p-5 rounded-3xl cursor-pointer flex flex-col justify-between items-center text-center hover:scale-[1.02] transition h-40 border">
+                        class="neu-flat p-5 rounded-3xl flex flex-col justify-between items-center text-center transition h-40 border">
                         <div class="flex justify-between w-full items-center">
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                 :class="table.status === 'Occupied' ? 'bg-neu-accent/20 text-neu-accent' : 'bg-emerald-500/20 text-emerald-400'">
-                                {{ table.status }}
+                                {{ table.status === 'Occupied' ? 'Busy / Occupied' : 'Available' }}
                             </span>
                         </div>
 
@@ -957,7 +1286,7 @@
         <!-- Printable Thermal Receipt Area -->
         <div id="printable-area" class="hidden print:block">
             <div class="text-center font-bold text-base uppercase border-b pb-1 mb-2">
-                MUGHAL-E-AZAM - RESTAURANT
+                {{ printerConfig.receiptHeader || 'MUGHAL-E-AZAM - RESTAURANT' }}
             </div>
             <div class="text-xs mb-2">
                 <div>Type: <b>{{ printableReceipt.title || 'RECEIPT' }}</b></div>
@@ -979,7 +1308,7 @@
                 <div class="flex justify-between font-bold text-sm border-t pt-1 mt-1"><span>Total:</span><span>Rs. {{ printableReceipt.grandTotal }}</span></div>
             </div>
             <div class="text-center text-[10px] mt-4 pt-2 border-t">
-                Thank you for dining at Mughal-E-Azam - Restaurant!
+                {{ printerConfig.receiptFooter || 'Thank you for dining at Mughal-E-Azam - Restaurant!' }}
             </div>
         </div>
 
@@ -1267,6 +1596,90 @@
             </div>
         </div>
 
+        <!-- Modal: Add / Edit User -->
+        <div v-if="showUserModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-[#262832]">
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-user-shield text-neu-accent"></i>
+                        <span>{{ editingUserIndex !== null ? 'Edit User Credentials & Access' : 'Create New User Account' }}</span>
+                    </h3>
+                    <button @click="showUserModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <form @submit.prevent="saveUser" class="space-y-3 text-xs">
+                    <div>
+                        <label class="text-neu-muted block mb-1">Full Display Name</label>
+                        <input type="text" v-model="newUserForm.name" placeholder="e.g. Tariq Manager" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-neu-muted block mb-1">Username</label>
+                            <input type="text" v-model="newUserForm.username" placeholder="cashier2" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                        </div>
+                        <div>
+                            <label class="text-neu-muted block mb-1">Password</label>
+                            <input type="password" v-model="newUserForm.password" placeholder="123" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1">User Role</label>
+                        <select v-model="newUserForm.role" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            <option value="Cashier">Cashier</option>
+                            <option value="Kitchen Manager">Kitchen Manager</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Admin">Admin</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-2 font-bold text-white">Granted Permissions & Tab Access</label>
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="pos" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">POS Terminal</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="kds" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">KDS Queue</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="menu_manage" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Menu & Categories</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="inventory" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Stock</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="tables" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Tables</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="history" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Records & Print</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="customers" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Customer CRM</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer bg-[#18191d] p-2 rounded-xl neu-pressed">
+                                <input type="checkbox" value="admin_dash" v-model="newUserForm.permissions" class="rounded accent-neu-accent">
+                                <span class="text-white">Admin Panel</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex justify-end space-x-3">
+                        <button type="button" @click="showUserModal = false" class="px-4 py-2 rounded-xl neu-button text-neu-muted">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save User Account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Modal: Add Expense -->
         <div v-if="showAddExpenseModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="neu-flat w-full max-w-sm rounded-3xl p-6 border border-[#282a35]">
@@ -1289,13 +1702,6 @@
             </div>
         </div>
 
-        <!-- Toast Notifications -->
-        <transition name="fade">
-            <div v-if="toastMessage" class="fixed bottom-6 right-6 bg-neu-accent text-white text-xs px-5 py-3 rounded-2xl neu-accent-glow font-bold z-50 flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>{{ toastMessage }}</span>
-            </div>
-        </transition>
 
     </div>
 
@@ -1306,7 +1712,7 @@
             data() {
                 return {
                     currentUser: {
-                        name: 'Shehenshah A.',
+                        name: 'System Administrator',
                         username: 'admin',
                         role: 'Admin',
                         permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash']
@@ -1315,8 +1721,7 @@
                     loginError: '',
 
                     users: [
-                        { name: 'Shehenshah A.', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] },
-                        { name: 'Tariq Cashier', username: 'cashier', password: '123', role: 'Cashier', permissions: ['pos', 'tables', 'history'] }
+                        { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
                     ],
 
                     currentTab: 'pos', // Terminal set as default main page
@@ -1338,6 +1743,8 @@
                     printerConfig: {
                         counterPrinterName: 'Thermal Counter POS Printer (80mm)',
                         kitchenPrinterName: 'Kitchen Ticket Printer (80mm)',
+                        receiptHeader: 'MUGHAL-E-AZAM - RESTAURANT',
+                        receiptFooter: 'Thank you for dining at Mughal-E-Azam - Restaurant!',
                         autoPrintKitchen: true
                     },
 
@@ -1372,6 +1779,10 @@
                     toastMessage: '',
                     selectedHistoryDate: new Date().toISOString().split('T')[0],
 
+                    purchaseSearchQuery: '',
+                    purchaseForm: { ingredientId: '', qty: null, unitCost: null, supplier: '' },
+                    purchaseHistory: [],
+
                     newExpenseForm: { title: '', amount: null },
                     newStockForm: { name: '', unit: 'kg', qty: 0, unitCost: 0 },
                     newDishForm: { name: '', code: '', category: '', price: null, desc: '' },
@@ -1383,25 +1794,9 @@
                         { id: 'all', name: 'All Items', icon: '👑', allowDiscount: false }
                     ],
 
-                    inventory: [
-                        { id: 1, name: 'Burger Buns', unit: 'pcs', qty: 100, unitCost: 25, minStock: 20 },
-                        { id: 2, name: 'Chicken Meat', unit: 'kg', qty: 50, unitCost: 650, minStock: 5 }
-                    ],
+                    inventory: [],
 
-                    menuItems: [
-                        {
-                            id: 1, code: 'FF01', name: 'Royal Zinger Burger', category: 'fastfood', price: 480, desc: 'Crispy fried chicken breast fillet in soft bun',
-                            recipe: [{ ingredientId: 1, qty: 1 }, { ingredientId: 2, qty: 0.2 }]
-                        },
-                        {
-                            id: 2, code: 'BBQ01', name: 'Chicken Tikka Boti', category: 'bbq', price: 650, desc: 'Smoky spiced chargrilled chicken boti',
-                            recipe: [{ ingredientId: 2, qty: 0.35 }]
-                        },
-                        {
-                            id: 3, code: 'DRK01', name: 'Cold Drink Bottle 1.5L', category: 'drinks', price: 180, desc: 'Chilled beverage',
-                            recipe: []
-                        }
-                    ],
+                    menuItems: [],
 
                     cart: [],
 
@@ -1434,6 +1829,12 @@
                     return this.menuItems.filter(item => {
                         return item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q);
                     });
+                },
+
+                filteredPurchaseStockItems() {
+                    if (!this.purchaseSearchQuery) return this.inventory;
+                    const q = this.purchaseSearchQuery.toLowerCase().trim();
+                    return this.inventory.filter(item => item.name.toLowerCase().includes(q));
                 },
 
                 subtotal() {
@@ -1613,6 +2014,18 @@
 
                 sendOrderToQueue() {
                     if (this.cart.length === 0) return;
+
+                    if (this.orderType === 'Dine-In') {
+                        if (!this.selectedTable) {
+                            this.currentTab = 'tables';
+                            this.showToast('Please select a Dining Table first!');
+                            return;
+                        }
+                        if (this.selectedTable.status === 'Occupied') {
+                            this.showToast(`Table ${this.selectedTable.name} is currently occupied/busy!`);
+                            return;
+                        }
+                    }
 
                     if (this.orderType === 'Dine-In' && this.selectedTable) {
                         this.selectedTable.status = 'Occupied';
@@ -1981,6 +2394,50 @@
                     this.showToast('Expense recorded');
                 },
 
+                recordStockPurchase() {
+                    if (!this.purchaseForm.ingredientId || !this.purchaseForm.qty || this.purchaseForm.qty <= 0) {
+                        this.showToast('Please select an ingredient and enter a valid quantity.');
+                        return;
+                    }
+
+                    const targetItem = this.inventory.find(i => i.id === this.purchaseForm.ingredientId);
+                    if (targetItem) {
+                        const addedQty = Number(this.purchaseForm.qty);
+                        const newCost = Number(this.purchaseForm.unitCost || targetItem.unitCost);
+
+                        targetItem.qty += addedQty;
+                        targetItem.unitCost = newCost;
+
+                        const now = new Date();
+                        const newPurchaseRecord = {
+                            id: Date.now(),
+                            date: now.toISOString().split('T')[0],
+                            time: this.currentTime,
+                            ingredientId: targetItem.id,
+                            itemName: targetItem.name,
+                            unit: targetItem.unit,
+                            qty: addedQty,
+                            unitCost: newCost,
+                            supplier: this.purchaseForm.supplier || 'Direct Purchase'
+                        };
+
+                        this.purchaseHistory.unshift(newPurchaseRecord);
+
+                        // Automatically log as store expense for total purchase cost
+                        const totalCost = addedQty * newCost;
+                        this.expenses.unshift({
+                            id: Date.now() + 1,
+                            title: `Stock Purchase: ${targetItem.name} (${addedQty} ${targetItem.unit})`,
+                            amount: totalCost,
+                            date: now.toISOString().split('T')[0]
+                        });
+
+                        this.purchaseForm = { ingredientId: '', qty: null, unitCost: null, supplier: '' };
+                        this.saveLocalStorageBackup();
+                        this.showToast(`Updated stock: +${addedQty} ${targetItem.unit} of ${targetItem.name}`);
+                    }
+                },
+
                 saveNewStock() {
                     if (!this.newStockForm.name) return;
                     this.inventory.push({
@@ -2008,6 +2465,46 @@
                     dish.recipe.push({ ingredientId: this.inventory[0] ? this.inventory[0].id : 1, qty: 0.1 });
                 },
 
+                openAddUserModal() {
+                    this.editingUserIndex = null;
+                    this.newUserForm = { name: '', username: '', password: '', role: 'Cashier', permissions: ['pos', 'tables'] };
+                    this.showUserModal = true;
+                },
+
+                openEditUserModal(idx) {
+                    this.editingUserIndex = idx;
+                    const u = this.users[idx];
+                    this.newUserForm = {
+                        name: u.name,
+                        username: u.username,
+                        password: u.password,
+                        role: u.role,
+                        permissions: [...u.permissions]
+                    };
+                    this.showUserModal = true;
+                },
+
+                saveUser() {
+                    if (!this.newUserForm.name || !this.newUserForm.username || !this.newUserForm.password) return;
+                    if (this.editingUserIndex !== null) {
+                        this.users[this.editingUserIndex] = { ...this.newUserForm };
+                        this.showToast('User account updated!');
+                    } else {
+                        this.users.push({ ...this.newUserForm });
+                        this.showToast('New user account created!');
+                    }
+                    this.showUserModal = false;
+                    this.saveLocalStorageBackup();
+                },
+
+                deleteUser(idx) {
+                    if (confirm(`Are you sure you want to delete user "${this.users[idx].name}"?`)) {
+                        this.users.splice(idx, 1);
+                        this.saveLocalStorageBackup();
+                        this.showToast('User account removed!');
+                    }
+                },
+
                 saveRecipes() {
                     this.showRecipeModal = false;
                     this.saveLocalStorageBackup();
@@ -2017,7 +2514,9 @@
                 saveLocalStorageBackup() {
                     try {
                         const state = {
+                            users: this.users,
                             orderHistory: this.orderHistory,
+                            purchaseHistory: this.purchaseHistory,
                             customers: this.customers,
                             inventory: this.inventory,
                             menuItems: this.menuItems,
@@ -2035,7 +2534,9 @@
                         const saved = localStorage.getItem('mughal_pos_backup');
                         if (saved) {
                             const parsed = JSON.parse(saved);
+                            if (parsed.users) this.users = parsed.users;
                             if (parsed.orderHistory) this.orderHistory = parsed.orderHistory;
+                            if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
                             if (parsed.customers) this.customers = parsed.customers;
                             if (parsed.inventory) this.inventory = parsed.inventory;
                             if (parsed.menuItems) this.menuItems = parsed.menuItems;
@@ -2136,6 +2637,10 @@
                 },
 
                 selectTable(table) {
+                    if (table.status === 'Occupied') {
+                        this.showToast(`Table ${table.name} is Busy/Occupied! Cannot select.`);
+                        return;
+                    }
                     this.selectedTable = table;
                     this.orderType = 'Dine-In';
                     this.currentTab = 'pos';
@@ -2148,8 +2653,7 @@
                 },
 
                 showToast(msg) {
-                    this.toastMessage = msg;
-                    setTimeout(() => { this.toastMessage = ''; }, 3000);
+                    // Toast notifications disabled per user request
                 }
             }
         }).mount('#app');
