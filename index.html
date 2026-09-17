@@ -1817,6 +1817,7 @@
                 return {
                     currentUser: null,
                     bootReady: false,
+                    bootError: '',
                     loginForm: { username: '', password: '' },
                     loginError: '',
 
@@ -2096,9 +2097,7 @@
             async mounted() {
                 this.updateClock();
                 setInterval(this.updateClock, 1000);
-                await this.loadPersistentData();
-                await this.detectSystemPrinters();
-                this.bootReady = true;
+                await this.startBoot();
             },
 
             methods: {
@@ -2107,6 +2106,10 @@
                     // prevents a false "zero users" result and unrestricted access.
                     if (!window.pywebview?.api) {
                         await new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true }));
+                    }
+                    if (!window.pywebview?.api?.get_boot_data) {
+                        this.bootError = 'The desktop database service is not available.';
+                        return;
                     }
                     try {
                         await this.loadPersistentData();
