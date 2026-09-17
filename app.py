@@ -49,13 +49,6 @@ class Api:
             except Exception:
                 pass
 
-        if not printers:
-            printers = [
-                'Default System Printer',
-                'POS-80 Thermal Receipt Printer',
-                'Kitchen Ticket Printer (KOT)',
-                'Counter Bill Printer'
-            ]
         return printers
 
     def test_printer(self, printer_name, receipt_type="Test"):
