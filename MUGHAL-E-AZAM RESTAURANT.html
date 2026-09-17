@@ -130,9 +130,43 @@
 
     <div id="app" class="h-full flex flex-col bg-[#16171b]">
 
-        <!-- Authentication Screen -->
+        <!-- Authentication & Owner First-Time Setup Screen -->
         <div v-if="!currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
-            <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
+            <!-- Case 1: First Time Setup (No Users Set) -->
+            <div v-if="users.length === 0" class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
+                <img src="assets/images/logo.jpg" alt="Mughal-E-Azam Logo" class="w-20 h-24 mx-auto rounded-3xl border-2 border-amber-400 object-cover mb-3 shadow-lg">
+
+                <h2 class="font-royal text-2xl font-bold tracking-wider text-white">SYSTEM OWNER SETUP</h2>
+                <p class="text-xs text-neu-muted mb-6">First time initialization: Set your main Master Owner Admin credentials</p>
+
+                <form @submit.prevent="saveInitialOwnerSetup" class="space-y-4 text-left">
+                    <div>
+                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Owner Display Name</label>
+                        <input type="text" v-model="initialOwnerForm.name" placeholder="e.g. Restaurant Owner" required
+                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Main Admin Username</label>
+                        <input type="text" v-model="initialOwnerForm.username" placeholder="Create username (e.g. owner)" required
+                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Main Admin Password</label>
+                        <input type="password" v-model="initialOwnerForm.password" placeholder="Create password" required
+                            class="w-full neu-input text-xs text-white rounded-2xl px-4 py-3 outline-none focus:ring-1 focus:ring-neu-accent">
+                    </div>
+
+                    <button type="submit" class="w-full py-3.5 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow hover:bg-neu-accentHover transition mt-2 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-crown"></i>
+                        <span>Save Owner Admin Account & Launch</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Case 2: Standard Login Screen -->
+            <div v-else class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
                 <img src="assets/images/logo.jpg" alt="Mughal-E-Azam Logo" class="w-24 h-24 mx-auto rounded-3xl border-2 border-amber-400 object-cover mb-4 shadow-lg">
 
                 <h2 class="font-royal text-2xl font-bold tracking-wider text-white">MUGHAL-E-AZAM</h2>
@@ -143,7 +177,7 @@
                         <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Username</label>
                         <div class="relative">
                             <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-neu-muted text-xs"></i>
-                            <input type="text" v-model="loginForm.username" placeholder="Enter username (admin/cashier)" required
+                            <input type="text" v-model="loginForm.username" placeholder="Enter username" required
                                 class="w-full neu-input text-xs text-white rounded-2xl pl-10 pr-4 py-3.5 outline-none focus:ring-1 focus:ring-neu-accent">
                         </div>
                     </div>
@@ -152,7 +186,7 @@
                         <label class="text-[11px] font-semibold text-neu-muted uppercase tracking-wider block mb-1">Password</label>
                         <div class="relative">
                             <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-neu-muted text-xs"></i>
-                            <input type="password" v-model="loginForm.password" placeholder="Enter password (123)" required
+                            <input type="password" v-model="loginForm.password" placeholder="Enter password" required
                                 class="w-full neu-input text-xs text-white rounded-2xl pl-10 pr-4 py-3.5 outline-none focus:ring-1 focus:ring-neu-accent">
                         </div>
                     </div>
@@ -167,20 +201,6 @@
                         <span>Authenticate & Sign In</span>
                     </button>
                 </form>
-
-                <div class="mt-8 pt-6 border-t border-[#23252d]">
-                    <p class="text-[11px] text-neu-muted mb-3 font-semibold uppercase tracking-wider">Quick Demo Login</p>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <button type="button" @click="quickLogin('admin')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
-                            <span class="font-bold text-white text-xs"><i class="fa-solid fa-shield-halved text-neu-accent mr-1"></i> Admin</span>
-                            <span class="text-[10px] text-neu-muted">Full Access</span>
-                        </button>
-                        <button type="button" @click="quickLogin('cashier')" class="p-2.5 neu-button rounded-xl text-left flex flex-col hover:border-neu-accent border border-transparent">
-                            <span class="font-bold text-white text-xs"><i class="fa-solid fa-cash-register text-emerald-400 mr-1"></i> Cashier</span>
-                            <span class="text-[10px] text-neu-muted">POS Terminal</span>
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -231,60 +251,46 @@
                     </span>
                 </button>
 
-                <!-- 3rd Tab: Menu & Categories -->
-                <button v-if="hasPermission('pos')" @click="currentTab = 'menu_manage'"
-                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'menu_manage'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
-                    <i class="fa-solid fa-utensils text-amber-400"></i>
-                    <span>Menu & Categories</span>
-                </button>
-
-                <!-- 4th Tab: Stock -->
-                <button v-if="hasPermission('inventory')" @click="currentTab = 'inventory'"
-                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'inventory'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
-                    <i class="fa-solid fa-boxes-stacked text-amber-400"></i>
-                    <span>Stock</span>
-                </button>
-
-                <!-- Purchasing Tab -->
-                <button v-if="hasPermission('inventory')" @click="currentTab = 'purchasing'"
-                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'purchasing'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
-                    <i class="fa-solid fa-cart-flatbed text-emerald-400"></i>
-                    <span>Purchasing</span>
-                </button>
-
-                <!-- 5th Tab: Tables -->
+                <!-- 3rd Tab: Tables (Moved to 3rd position per request) -->
                 <button v-if="hasPermission('tables')" @click="currentTab = 'tables'"
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'tables'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
                     <i class="fa-solid fa-chair text-emerald-400"></i>
                     <span>Tables</span>
                 </button>
 
-                <!-- Additional Tabs -->
+                <!-- 4th Tab: Menu & Categories -->
+                <button v-if="hasPermission('pos')" @click="currentTab = 'menu_manage'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'menu_manage'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
+                    <i class="fa-solid fa-utensils text-amber-400"></i>
+                    <span>Menu & Categories</span>
+                </button>
+
+                <!-- 5th Tab: Stock -->
+                <button v-if="hasPermission('inventory')" @click="currentTab = 'inventory'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'inventory'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
+                    <i class="fa-solid fa-boxes-stacked text-amber-400"></i>
+                    <span>Stock</span>
+                </button>
+
+                <!-- 6th Tab: Purchasing -->
+                <button v-if="hasPermission('inventory')" @click="currentTab = 'purchasing'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'purchasing'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
+                    <i class="fa-solid fa-cart-flatbed text-emerald-400"></i>
+                    <span>Purchasing</span>
+                </button>
+
+                <!-- 7th Tab: Records & Print -->
                 <button v-if="hasPermission('history')" @click="currentTab = 'history'"
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'history'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
                     <i class="fa-solid fa-calendar-days text-blue-400"></i>
                     <span>Records & Print</span>
                 </button>
 
+                <!-- 8th Tab: Customer CRM -->
                 <button v-if="hasPermission('customers')" @click="currentTab = 'customers'"
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'customers'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
                     <i class="fa-solid fa-user-gear text-purple-400"></i>
                     <span>Customer CRM</span>
-                </button>
-
-                <button @click="showOpeningBalanceModal = true" class="px-3.5 py-2 neu-button text-amber-400 rounded-xl text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap">
-                    <i class="fa-solid fa-vault"></i>
-                    <span>Opening Cash</span>
-                </button>
-
-                <button @click="showPrinterSettingsModal = true" class="px-3.5 py-2 neu-button text-emerald-400 rounded-xl text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap">
-                    <i class="fa-solid fa-print"></i>
-                    <span>Dual Printers</span>
-                </button>
-
-                <button @click="showBackupModal = true" class="px-3.5 py-2 neu-button text-blue-400 rounded-xl text-xs font-semibold flex items-center space-x-1.5 whitespace-nowrap">
-                    <i class="fa-solid fa-database"></i>
-                    <span>Backup</span>
                 </button>
 
                 <!-- Admin Panel Button -->
@@ -536,16 +542,54 @@
                 <!-- Sub-tab 3: Hardware & Dual Printers Setup -->
                 <div v-show="adminSubTab === 'printers'" class="space-y-6">
                     <div class="neu-flat p-6 rounded-3xl border border-[#252833] max-w-2xl">
-                        <h3 class="text-base font-bold text-white mb-4"><i class="fa-solid fa-print text-emerald-400 mr-2"></i>Hardware Dual Printer Configuration</h3>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-base font-bold text-white"><i class="fa-solid fa-print text-emerald-400 mr-2"></i>Hardware Dual Printer Configuration</h3>
+                            <button @click="detectSystemPrinters" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1">
+                                <i class="fa-solid fa-rotate mr-1"></i>
+                                <span>Scan Printers</span>
+                            </button>
+                        </div>
+
                         <div class="space-y-4 text-xs">
+                            <!-- Counter Printer -->
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
-                                <span class="font-bold text-emerald-400 block"><i class="fa-solid fa-receipt mr-1"></i>1. Counter & Customer Receipt Printer</span>
-                                <input type="text" v-model="printerConfig.counterPrinterName" placeholder="e.g. Thermal Counter POS Printer (80mm)" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-emerald-400 block"><i class="fa-solid fa-receipt mr-1"></i>1. Counter & Customer Receipt Printer</span>
+                                    <button @click="testPrinterHardware(printerConfig.counterPrinterName, 'Counter Receipt')" class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
+                                        <i class="fa-solid fa-vial mr-1"></i>
+                                        <span>Test Receipt</span>
+                                    </button>
+                                </div>
+                                <select v-model="printerConfig.counterPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
+                                </select>
                             </div>
 
+                            <!-- Kitchen Printer -->
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
-                                <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Ticket Printer (KOT Queue)</span>
-                                <input type="text" v-model="printerConfig.kitchenPrinterName" placeholder="e.g. Kitchen Ticket Printer (80mm)" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Ticket Printer (KOT Queue)</span>
+                                    <button @click="testPrinterHardware(printerConfig.kitchenPrinterName, 'Kitchen KOT')" class="px-2.5 py-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
+                                        <i class="fa-solid fa-vial mr-1"></i>
+                                        <span>Test KOT</span>
+                                    </button>
+                                </div>
+                                <select v-model="printerConfig.kitchenPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
+                                </select>
+                            </div>
+
+                            <!-- Custom Header & Footer Branding -->
+                            <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-3">
+                                <span class="font-bold text-purple-400 block"><i class="fa-solid fa-heading mr-1"></i>3. Receipt Branding Customization</span>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Receipt Header Text</label>
+                                    <input type="text" v-model="printerConfig.receiptHeader" placeholder="MUGHAL-E-AZAM RESTAURANT" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Receipt Footer Note</label>
+                                    <input type="text" v-model="printerConfig.receiptFooter" placeholder="Thank you for dining with us!" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                </div>
                             </div>
 
                             <label class="flex items-center space-x-2 text-white font-semibold cursor-pointer pt-2">
@@ -694,12 +738,27 @@
                         </button>
                     </div>
 
-                    <!-- Customer Info Prompt -->
+                    <!-- Table Selection Dropdown for Dine-In -->
+                    <div v-if="orderType === 'Dine-In'" class="mb-2 p-2.5 bg-[#18191d] rounded-2xl neu-pressed text-xs">
+                        <label class="text-[10px] text-neu-muted font-bold block mb-1 uppercase"><i class="fa-solid fa-chair text-emerald-400 mr-1"></i>Select Table</label>
+                        <select :value="selectedTable ? selectedTable.id : ''" @change="onTableDropdownSelect($event)" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                            <option value="" disabled>Choose Table...</option>
+                            <option v-for="t in tables" :key="t.id" :value="t.id" :disabled="t.status === 'Occupied'">
+                                {{ t.name }} {{ t.status === 'Occupied' ? '(Busy / Occupied)' : '(Available)' }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Customer Info & Delivery Fee Prompt -->
                     <div v-if="orderType === 'Takeaway' || orderType === 'Delivery'" class="mb-2 p-2.5 bg-[#18191d] rounded-2xl neu-pressed text-xs relative">
                         <div class="space-y-1.5">
                             <input type="text" v-model="activeCustomerName" placeholder="Customer Name" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
                             <input type="text" v-model="activeCustomerPhone" placeholder="Phone Number" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
                             <input type="text" v-model="activeCustomerAddress" placeholder="Address" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                            <div v-if="orderType === 'Delivery'" class="flex items-center space-x-2 pt-1 border-t border-[#262832]">
+                                <span class="text-[10px] font-bold text-neu-muted uppercase whitespace-nowrap"><i class="fa-solid fa-truck text-emerald-400 mr-1"></i>Delivery Fee (Rs):</span>
+                                <input type="number" min="0" v-model.number="deliveryFeeInput" placeholder="0" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                            </div>
                         </div>
                     </div>
 
@@ -739,9 +798,9 @@
                                 -Rs. {{ totalDiscountAmount.toFixed(2) }}
                             </button>
                         </div>
-                        <div class="flex justify-between text-neu-muted">
-                            <span>GST Sales Tax (5%)</span>
-                            <span class="text-white font-semibold">Rs. {{ taxAmount.toFixed(2) }}</span>
+                        <div v-if="orderType === 'Delivery' && deliveryCharges > 0" class="flex justify-between text-neu-muted">
+                            <span>Delivery Charges</span>
+                            <span class="text-emerald-400 font-semibold">Rs. {{ deliveryCharges.toFixed(2) }}</span>
                         </div>
                         <div class="flex justify-between text-sm font-bold pt-1 border-t border-[#2a2d37] text-white">
                             <span>Total Payable</span>
@@ -907,6 +966,10 @@
                                     <td class="p-3 text-neu-muted">{{ getCategoryName(item.category) }}</td>
                                     <td class="p-3 font-bold text-emerald-400">Rs. {{ item.price }}</td>
                                     <td class="p-3 text-right space-x-2">
+                                        <button @click="openRecipeForDish(item)" class="px-2.5 py-1 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-300 hover:bg-purple-600 hover:text-white text-xs font-bold space-x-1" title="Configure Dish Recipe">
+                                            <i class="fa-solid fa-sliders"></i>
+                                            <span>Add Recipe</span>
+                                        </button>
                                         <button @click="openEditDish(item)" class="px-2.5 py-1 rounded-xl neu-button text-amber-400 hover:text-white text-xs" title="Edit Item Details">
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </button>
@@ -999,10 +1062,14 @@
 
                         <form @submit.prevent="recordStockPurchase" class="space-y-3 text-xs">
                             <div>
-                                <label class="text-neu-muted block mb-1">Select Ingredient Item</label>
+                                <label class="text-neu-muted block mb-1">Search & Select Ingredient Item</label>
+                                <div class="relative mb-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-neu-muted text-xs"></i>
+                                    <input type="text" v-model="purchasingIngredientSearch" placeholder="Search ingredient name..." class="w-full neu-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white outline-none">
+                                </div>
                                 <select v-model="purchaseForm.ingredientId" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
-                                    <option value="" disabled>Choose stock item...</option>
-                                    <option v-for="ing in inventory" :key="ing.id" :value="ing.id">
+                                    <option value="" disabled>Choose searched stock item...</option>
+                                    <option v-for="ing in filteredPurchasingDropdownIngredients" :key="ing.id" :value="ing.id">
                                         {{ ing.name }} (Current: {{ ing.qty }} {{ ing.unit }})
                                     </option>
                                 </select>
@@ -1115,24 +1182,33 @@
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 class="text-xl font-bold font-royal text-white">Order Records & Receipt Reprinting</h2>
-                        <p class="text-xs text-neu-muted">Search and review transaction details</p>
+                        <p class="text-xs text-neu-muted">Search by customer name, order/invoice bill #, or total payment amount</p>
                     </div>
 
-                    <div class="flex items-center space-x-3 bg-[#18191d] p-2 rounded-2xl neu-pressed">
-                        <i class="fa-solid fa-calendar-day text-neu-accent pl-2"></i>
-                        <span class="text-xs text-neu-muted font-bold">Filter Date:</span>
-                        <input type="date" v-model="selectedHistoryDate" class="neu-input text-xs text-white p-2 rounded-xl outline-none">
+                    <div class="flex flex-col sm:flex-row items-center gap-3">
+                        <!-- Multi-Field Search Input -->
+                        <div class="relative w-full sm:w-72">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-neu-muted text-xs"></i>
+                            <input type="text" v-model="recordSearchQuery" placeholder="Search customer, bill #, total..." class="w-full neu-input pl-8 pr-3 py-2 rounded-xl text-xs text-white outline-none">
+                        </div>
+
+                        <!-- Filter Date Input -->
+                        <div class="flex items-center space-x-2 bg-[#18191d] px-3 py-1.5 rounded-2xl neu-pressed">
+                            <i class="fa-solid fa-calendar-day text-neu-accent"></i>
+                            <span class="text-xs text-neu-muted font-bold">Date:</span>
+                            <input type="date" v-model="selectedHistoryDate" class="neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                        </div>
                     </div>
                 </div>
 
                 <div class="neu-flat p-6 rounded-3xl border border-[#252833]">
-                    <div v-if="filteredDateOrders.length === 0" class="p-8 text-center text-neu-muted text-xs">
-                        <i class="fa-solid fa-calendar-xmark text-3xl mb-2 text-neu-accent"></i>
-                        <p>No orders recorded for date {{ selectedHistoryDate }}.</p>
+                    <div v-if="filteredSearchOrders.length === 0" class="p-8 text-center text-neu-muted text-xs">
+                        <i class="fa-solid fa-receipt text-3xl mb-2 text-neu-accent"></i>
+                        <p>No order receipts matched query or date {{ selectedHistoryDate }}.</p>
                     </div>
 
                     <div v-else class="space-y-4">
-                        <div v-for="ord in filteredDateOrders" :key="ord.id" class="p-4 rounded-2xl neu-pressed text-xs space-y-3 border border-[#262833]">
+                        <div v-for="ord in filteredSearchOrders" :key="ord.id" class="p-4 rounded-2xl neu-pressed text-xs space-y-3 border border-[#262833]">
                             <div class="flex justify-between items-center border-b border-[#262832] pb-2">
                                 <div class="flex items-center space-x-3">
                                     <span class="font-bold text-white text-sm">Order #{{ ord.id }}</span>
@@ -1201,35 +1277,50 @@
             </div>
 
             <!-- Tables Tab -->
-            <div v-show="currentTab === 'tables' && hasPermission('tables')" class="h-full p-6 overflow-y-auto">
-                <div class="flex justify-between items-center mb-6">
+            <div v-show="currentTab === 'tables' && hasPermission('tables')" class="h-full p-6 overflow-y-auto space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="text-xl font-bold font-royal text-white">Table Layout</h2>
-                        <p class="text-xs text-neu-muted">Select dining table for Dine-In order</p>
+                        <h2 class="text-xl font-bold font-royal text-white">Dining Table Layout & Management</h2>
+                        <p class="text-xs text-neu-muted">Create tables, view occupied status, rename, delete or click to view active terminal order</p>
                     </div>
+                    <button @click="openAddTableModal" class="px-4 py-2.5 bg-emerald-500 text-white font-bold rounded-2xl text-xs neu-accent-glow flex items-center space-x-2">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>+ Add New Table</span>
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                    <div v-for="table in tables" :key="table.id" @click="selectTable(table)"
+                <div v-if="tables.length === 0" class="neu-flat p-12 rounded-3xl text-center text-neu-muted text-xs border border-[#252833]">
+                    <i class="fa-solid fa-chair text-4xl mb-3 text-neu-accent"></i>
+                    <p class="text-white font-bold text-sm">No dining tables configured yet.</p>
+                    <p class="text-xs mt-1">Click "+ Add New Table" above to setup your dining area.</p>
+                </div>
+
+                <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    <div v-for="table in tables" :key="table.id" @click="clickTableCard(table)"
                         :class="[
-                            table.status === 'Occupied' ? 'border-neu-accent/50 bg-[#251b22] opacity-75 cursor-not-allowed' : 'border-transparent cursor-pointer hover:scale-[1.02]',
+                            table.status === 'Occupied' ? 'border-neu-accent/50 bg-[#251b22]' : 'border-transparent hover:scale-[1.02]',
                             selectedTable && selectedTable.id === table.id ? 'ring-2 ring-neu-accent' : ''
                         ]"
-                        class="neu-flat p-5 rounded-3xl flex flex-col justify-between items-center text-center transition h-40 border">
+                        class="neu-flat p-5 rounded-3xl cursor-pointer flex flex-col justify-between items-center text-center transition h-44 border relative group">
                         <div class="flex justify-between w-full items-center">
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                 :class="table.status === 'Occupied' ? 'bg-neu-accent/20 text-neu-accent' : 'bg-emerald-500/20 text-emerald-400'">
                                 {{ table.status === 'Occupied' ? 'Busy / Occupied' : 'Available' }}
                             </span>
+                            <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition">
+                                <button @click.stop="openEditTableModal(table)" class="text-amber-400 p-1 text-[11px]" title="Rename Table"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button @click.stop="deleteTable(table.id)" class="text-neu-accent p-1 text-[11px]" title="Delete Table"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
                         </div>
 
-                        <div class="w-14 h-14 rounded-full neu-pressed flex items-center justify-center my-2">
+                        <div class="w-12 h-12 rounded-full neu-pressed flex items-center justify-center my-1">
                             <i class="fa-solid fa-chair text-lg" :class="table.status === 'Occupied' ? 'text-neu-accent' : 'text-neu-muted'"></i>
                         </div>
 
-                        <div>
-                            <div class="font-bold text-sm text-white">{{ table.name }}</div>
-                            <button v-if="table.status === 'Occupied'" @click.stop="releaseTable(table)" class="text-[10px] text-neu-accent underline font-bold mt-1">
+                        <div class="w-full">
+                            <div class="font-bold text-sm text-white line-clamp-1">{{ table.name }}</div>
+                            <div class="text-[10px] text-neu-muted mt-0.5">Click to Open in POS</div>
+                            <button v-if="table.status === 'Occupied'" @click.stop="releaseTable(table)" class="text-[10px] text-neu-accent underline font-bold mt-1 block w-full text-center">
                                 Mark Free
                             </button>
                         </div>
@@ -1304,7 +1395,7 @@
             <div class="text-xs space-y-0.5">
                 <div class="flex justify-between"><span>Subtotal:</span><span>Rs. {{ printableReceipt.subtotal }}</span></div>
                 <div v-if="printableReceipt.discount > 0" class="flex justify-between"><span>Discount:</span><span>-Rs. {{ printableReceipt.discount }}</span></div>
-                <div v-if="printableReceipt.tax > 0" class="flex justify-between"><span>Tax (5%):</span><span>Rs. {{ printableReceipt.tax }}</span></div>
+                <div v-if="printableReceipt.deliveryFee > 0" class="flex justify-between"><span>Delivery Fee:</span><span>Rs. {{ printableReceipt.deliveryFee }}</span></div>
                 <div class="flex justify-between font-bold text-sm border-t pt-1 mt-1"><span>Total:</span><span>Rs. {{ printableReceipt.grandTotal }}</span></div>
             </div>
             <div class="text-center text-[10px] mt-4 pt-2 border-t">
@@ -1431,6 +1522,27 @@
                     </div>
 
                     <button type="submit" class="w-full py-3 bg-amber-500 text-white font-bold rounded-xl">Save Opening Balance</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Add / Rename Table -->
+        <div v-if="showTableModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-sm rounded-3xl p-6 border border-[#282a35]">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-[#262832]">
+                    <h3 class="font-bold text-white text-sm">{{ editingTableId ? 'Rename Dining Table' : 'Add New Dining Table' }}</h3>
+                    <button @click="showTableModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <form @submit.prevent="saveTable" class="space-y-3 text-xs">
+                    <div>
+                        <label class="text-neu-muted block mb-1">Table Name / Label</label>
+                        <input type="text" v-model="tableForm.name" placeholder="e.g. Table 05 or VIP Booth 1" required class="w-full neu-input p-3 rounded-xl text-white outline-none">
+                    </div>
+                    <div class="flex space-x-2 pt-2">
+                        <button type="button" @click="showTableModal = false" class="w-1/2 py-2.5 rounded-xl neu-button text-neu-muted">Cancel</button>
+                        <button type="submit" class="w-1/2 py-2.5 bg-emerald-500 text-white font-bold rounded-xl neu-accent-glow">Save Table</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -1719,6 +1831,7 @@
                     },
                     loginForm: { username: '', password: '' },
                     loginError: '',
+                    initialOwnerForm: { name: '', username: '', password: '' },
 
                     users: [
                         { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
@@ -1739,6 +1852,14 @@
                     activeCustomerName: '',
                     activeCustomerPhone: '',
                     activeCustomerAddress: '',
+                    deliveryFeeInput: null,
+
+                    availablePrinters: [
+                        'Default System Printer',
+                        'Thermal Counter POS Printer (80mm)',
+                        'Kitchen Ticket Printer (80mm)',
+                        'Counter Bill Printer'
+                    ],
 
                     printerConfig: {
                         counterPrinterName: 'Thermal Counter POS Printer (80mm)',
@@ -1773,15 +1894,22 @@
                     showAdminPanelModal: false,
                     showEditCategoryModal: false,
                     showEditDishModal: false,
+                    showTableModal: false,
+
+                    editingTableId: null,
+                    tableForm: { name: '' },
 
                     menuSearchQuery: '',
+                    recordSearchQuery: '',
                     discountPercent: 0,
                     toastMessage: '',
                     selectedHistoryDate: new Date().toISOString().split('T')[0],
 
                     purchaseSearchQuery: '',
+                    purchasingIngredientSearch: '',
                     purchaseForm: { ingredientId: '', qty: null, unitCost: null, supplier: '' },
                     purchaseHistory: [],
+                    activeRecipeDish: null,
 
                     newExpenseForm: { title: '', amount: null },
                     newStockForm: { name: '', unit: 'kg', qty: 0, unitCost: 0 },
@@ -1837,6 +1965,12 @@
                     return this.inventory.filter(item => item.name.toLowerCase().includes(q));
                 },
 
+                filteredPurchasingDropdownIngredients() {
+                    if (!this.purchasingIngredientSearch) return this.inventory;
+                    const q = this.purchasingIngredientSearch.toLowerCase().trim();
+                    return this.inventory.filter(item => item.name.toLowerCase().includes(q));
+                },
+
                 subtotal() {
                     return this.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
                 },
@@ -1852,12 +1986,16 @@
                     return (this.eligibleDiscountSubtotal * this.discountPercent) / 100;
                 },
 
+                deliveryCharges() {
+                    return (this.orderType === 'Delivery') ? Number(this.deliveryFeeInput || 0) : 0;
+                },
+
                 taxAmount() {
-                    return Math.max(0, (this.subtotal - this.totalDiscountAmount) * 0.05);
+                    return 0;
                 },
 
                 grandTotal() {
-                    return Math.max(0, this.subtotal - this.totalDiscountAmount + this.taxAmount);
+                    return Math.max(0, this.subtotal - this.totalDiscountAmount + this.deliveryCharges);
                 },
 
                 changeReturn() {
@@ -1926,6 +2064,20 @@
 
                 filteredDateOrders() {
                     return this.orderHistory.filter(ord => ord.date === this.selectedHistoryDate);
+                },
+
+                filteredSearchOrders() {
+                    let orders = this.filteredDateOrders;
+                    if (!this.recordSearchQuery) return orders;
+                    const q = this.recordSearchQuery.toLowerCase().trim();
+                    return orders.filter(ord => {
+                        const matchId = String(ord.id).toLowerCase().includes(q);
+                        const matchCustomer = (ord.customerName || '').toLowerCase().includes(q);
+                        const matchTable = (ord.tableName || '').toLowerCase().includes(q);
+                        const matchTotal = String(ord.grandTotal).includes(q);
+                        const matchItems = ord.items.some(i => i.name.toLowerCase().includes(q));
+                        return matchId || matchCustomer || matchTable || matchTotal || matchItems;
+                    });
                 },
 
                 categorySalesBreakdown() {
@@ -2309,7 +2461,8 @@
                         items: JSON.parse(JSON.stringify(this.cart)),
                         subtotal: this.subtotal,
                         discount: this.totalDiscountAmount,
-                        tax: this.taxAmount,
+                        deliveryFee: this.deliveryCharges,
+                        tax: 0,
                         grandTotal: this.grandTotal,
                         cashTendered: this.cashTendered,
                         changeReturn: this.changeReturn
@@ -2318,7 +2471,7 @@
                     this.orderHistory.unshift(newRecord);
 
                     this.triggerThermalPrint({
-                        title: 'FINAL PAID TAX RECEIPT',
+                        title: 'FINAL PAID RECEIPT',
                         orderId: this.currentOrderId,
                         time: this.currentTime,
                         tableName: this.selectedTable ? this.selectedTable.name : '',
@@ -2326,7 +2479,8 @@
                         items: this.cart,
                         subtotal: this.subtotal,
                         discount: this.totalDiscountAmount,
-                        tax: this.taxAmount,
+                        deliveryFee: this.deliveryCharges,
+                        tax: 0,
                         grandTotal: this.grandTotal
                     });
 
@@ -2339,6 +2493,7 @@
                     this.activeCustomerName = '';
                     this.activeCustomerPhone = '';
                     this.activeCustomerAddress = '';
+                    this.deliveryFeeInput = null;
                     this.cashTendered = null;
                     this.currentOrderId = (parseInt(this.currentOrderId) + 1).toString();
 
@@ -2372,6 +2527,47 @@
                     this.showOpeningBalanceModal = false;
                     this.saveLocalStorageBackup();
                     this.showToast('Daily Opening Cash Saved');
+                },
+
+                async detectSystemPrinters() {
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_system_printers) {
+                        try {
+                            const res = await window.pywebview.api.get_system_printers();
+                            if (res && Array.isArray(res) && res.length > 0) {
+                                this.availablePrinters = res;
+                                if (!this.availablePrinters.includes(this.printerConfig.counterPrinterName)) {
+                                    this.printerConfig.counterPrinterName = this.availablePrinters[0];
+                                }
+                                if (!this.availablePrinters.includes(this.printerConfig.kitchenPrinterName)) {
+                                    this.printerConfig.kitchenPrinterName = this.availablePrinters[Math.min(1, this.availablePrinters.length - 1)];
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error fetching printers via pywebview API:', e);
+                        }
+                    }
+                },
+
+                async testPrinterHardware(printerName, typeLabel) {
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.test_printer) {
+                        try {
+                            await window.pywebview.api.test_printer(printerName, typeLabel);
+                        } catch (e) {
+                            console.error('Error testing printer:', e);
+                        }
+                    }
+                    this.triggerThermalPrint({
+                        title: `TEST ${typeLabel.toUpperCase()}`,
+                        orderId: 'TEST-001',
+                        time: this.currentTime,
+                        tableName: 'Test Table 1',
+                        customerName: 'Test Customer',
+                        items: [{ name: 'Test Sample Item', qty: 1, price: 100 }],
+                        subtotal: 100,
+                        discount: 0,
+                        tax: 0,
+                        grandTotal: 100
+                    });
                 },
 
                 savePrinterSettings() {
@@ -2596,6 +2792,23 @@
                     reader.readAsText(file);
                 },
 
+                saveInitialOwnerSetup() {
+                    if (!this.initialOwnerForm.username.trim() || !this.initialOwnerForm.password.trim()) return;
+                    const newOwner = {
+                        id: Date.now(),
+                        name: this.initialOwnerForm.name.trim() || 'Restaurant Owner',
+                        username: this.initialOwnerForm.username.trim(),
+                        password: this.initialOwnerForm.password.trim(),
+                        role: 'Admin',
+                        permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash']
+                    };
+                    this.users = [newOwner];
+                    this.currentUser = newOwner;
+                    this.initialOwnerForm = { name: '', username: '', password: '' };
+                    this.saveLocalStorageBackup();
+                    this.showToast('Owner account created successfully!');
+                },
+
                 handleLogin() {
                     const found = this.users.find(u => u.username === this.loginForm.username && u.password === this.loginForm.password);
                     if (found) {
@@ -2634,6 +2847,63 @@
 
                 proceedToCheckout() {
                     if (this.cart.length > 0) this.showCheckoutModal = true;
+                },
+
+                onTableDropdownSelect(event) {
+                    const selectedId = Number(event.target.value);
+                    const foundTable = this.tables.find(t => t.id === selectedId);
+                    if (foundTable) {
+                        this.selectTable(foundTable);
+                    }
+                },
+
+                openAddTableModal() {
+                    this.editingTableId = null;
+                    this.tableForm.name = '';
+                    this.showTableModal = true;
+                },
+
+                openEditTableModal(table) {
+                    this.editingTableId = table.id;
+                    this.tableForm.name = table.name;
+                    this.showTableModal = true;
+                },
+
+                saveTable() {
+                    if (!this.tableForm.name.trim()) return;
+                    if (this.editingTableId) {
+                        const found = this.tables.find(t => t.id === this.editingTableId);
+                        if (found) found.name = this.tableForm.name.trim();
+                    } else {
+                        const newId = this.tables.length > 0 ? Math.max(...this.tables.map(t => t.id)) + 1 : 1;
+                        this.tables.push({
+                            id: newId,
+                            name: this.tableForm.name.trim(),
+                            status: 'Available'
+                        });
+                    }
+                    this.showTableModal = false;
+                },
+
+                deleteTable(tableId) {
+                    this.tables = this.tables.filter(t => t.id !== tableId);
+                    if (this.selectedTable && this.selectedTable.id === tableId) {
+                        this.selectedTable = null;
+                    }
+                },
+
+                clickTableCard(table) {
+                    if (table.status === 'Occupied') {
+                        this.currentTab = 'pos';
+                        this.selectedTable = table;
+                    } else {
+                        this.selectTable(table);
+                    }
+                },
+
+                openRecipeForDish(item) {
+                    this.activeRecipeDish = item;
+                    this.showRecipeModal = true;
                 },
 
                 selectTable(table) {
