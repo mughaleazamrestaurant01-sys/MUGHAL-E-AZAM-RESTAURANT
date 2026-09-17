@@ -130,6 +130,15 @@
 
     <div id="app" class="h-full flex flex-col bg-[#16171b]">
 
+        <!-- Never show unrestricted POS content until the desktop database bridge has answered. -->
+        <div v-if="!bootReady" class="fixed inset-0 bg-[#141519] z-[60] flex items-center justify-center p-4">
+            <div class="neu-flat rounded-3xl p-8 text-center border border-[#252730]">
+                <i class="fa-solid fa-database animate-pulse text-3xl text-neu-accent mb-3"></i>
+                <p class="text-sm font-bold text-white">{{ bootError || 'Opening saved POS data…' }}</p>
+                <p class="text-xs text-neu-muted mt-2">{{ bootError ? 'Restart the software. Your POS screen remains locked to protect your data.' : 'Please wait. Do not close the software.' }}</p>
+            </div>
+        </div>
+
         <!-- Authentication Screen (Only when users exist and not logged in) -->
         <div v-if="bootReady && users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
             <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
@@ -562,7 +571,7 @@
 
                             <label class="flex items-center space-x-2 text-white font-semibold cursor-pointer pt-2">
                                 <input type="checkbox" v-model="printerConfig.autoPrintKitchen" class="rounded accent-neu-accent w-4 h-4">
-                                <span>Auto-send receipt to Kitchen Printer when order placed</span>
+                                <span>Print to Kitchen only when the Kitchen KOT button is clicked</span>
                             </label>
 
                             <button @click="savePrinterSettings" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save Hardware Printer Setup</button>
@@ -731,6 +740,13 @@
                             <input type="text" v-model="activeCustomerName" placeholder="Customer Name" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
                             <input type="text" v-model="activeCustomerPhone" placeholder="Phone Number" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
                             <input type="text" v-model="activeCustomerAddress" placeholder="Address" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                            <div v-if="customerSuggestions.length" class="rounded-xl border border-[#343846] bg-[#20222a] overflow-hidden">
+                                <p class="px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-neu-muted">Saved customers — click to use</p>
+                                <button v-for="customer in customerSuggestions" :key="customer.id" @click="selectCustomer(customer)" type="button" class="w-full px-2 py-1.5 text-left text-[11px] hover:bg-neu-accent/15 border-t border-[#343846]">
+                                    <span class="font-bold text-white">{{ customer.name }}</span>
+                                    <span class="text-neu-muted"> · {{ customer.phone || 'No phone' }}<span v-if="customer.address"> · {{ customer.address }}</span></span>
+                                </button>
+                            </div>
                             <div v-if="orderType === 'Delivery'" class="flex items-center space-x-2 pt-1 border-t border-[#262832]">
                                 <span class="text-[10px] font-bold text-neu-muted uppercase whitespace-nowrap"><i class="fa-solid fa-truck text-emerald-400 mr-1"></i>Delivery Fee (Rs):</span>
                                 <input type="number" min="0" v-model.number="deliveryFeeInput" placeholder="0" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
@@ -1832,7 +1848,7 @@
                         kitchenPrinterName: '',
                         receiptHeader: 'MUGHAL-E-AZAM - RESTAURANT',
                         receiptFooter: 'Thank you for dining at Mughal-E-Azam - Restaurant!',
-                        autoPrintKitchen: true
+                        autoPrintKitchen: true // The Kitchen KOT button is the only action that sends a KOT.
                     },
 
                     printableReceipt: {
@@ -2046,6 +2062,19 @@
                     });
                 },
 
+                customerSuggestions() {
+                    const name = (this.activeCustomerName || '').trim().toLowerCase();
+                    const phone = (this.activeCustomerPhone || '').trim().toLowerCase();
+                    const address = (this.activeCustomerAddress || '').trim().toLowerCase();
+                    const query = name || phone || address;
+                    if (!query) return [];
+                    return this.customers.filter(customer =>
+                        (customer.name || '').toLowerCase().includes(query) ||
+                        (customer.phone || '').toLowerCase().includes(query) ||
+                        (customer.address || '').toLowerCase().includes(query)
+                    ).slice(0, 5);
+                },
+
                 categorySalesBreakdown() {
                     const totals = {};
                     this.categories.forEach(c => { if(c.id !== 'all') totals[c.id] = 0; });
@@ -2073,10 +2102,29 @@
             },
 
             methods: {
+                async startBoot() {
+                    // pywebview exposes its API after page load. Waiting for that event
+                    // prevents a false "zero users" result and unrestricted access.
+                    if (!window.pywebview?.api) {
+                        await new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true }));
+                    }
+                    try {
+                        await this.loadPersistentData();
+                        await this.detectSystemPrinters();
+                    } catch (error) {
+                        console.error('POS startup failed:', error);
+                        this.bootError = 'Unable to open the saved POS database.';
+                        return;
+                    }
+                    this.bootReady = true;
+                },
+
                 updateClock() {
                     const now = new Date();
                     this.currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 },
+
+
 
                 isCategoryDiscountAllowed(catId) {
                     const found = this.categories.find(c => c.id === catId);
@@ -2126,6 +2174,12 @@
                     this.activeCustomerPhone = '';
                     this.activeCustomerAddress = '';
                     this.showToast('Cart cleared');
+                },
+
+                selectCustomer(customer) {
+                    this.activeCustomerName = customer.name || '';
+                    this.activeCustomerPhone = customer.phone || '';
+                    this.activeCustomerAddress = customer.address || '';
                 },
 
                 sendOrderToQueue() {
@@ -2435,6 +2489,8 @@
                         time: this.currentTime,
                         orderType: this.orderType,
                         customerName: this.activeCustomerName,
+                        customerPhone: this.activeCustomerPhone,
+                        customerAddress: this.activeCustomerAddress,
                         tableName: this.selectedTable ? this.selectedTable.name : '',
                         paymentMethod: this.paymentMethod,
                         items: JSON.parse(JSON.stringify(this.cart)),
@@ -2448,6 +2504,30 @@
                     };
 
                     this.orderHistory.unshift(newRecord);
+
+                    // Keep one reusable profile per phone number (or, when no phone is
+                    // supplied, per customer name) so future orders can autocomplete it.
+                    if ((this.orderType === 'Takeaway' || this.orderType === 'Delivery') && this.activeCustomerName.trim()) {
+                        const normalizedPhone = this.activeCustomerPhone.trim().replace(/\s+/g, '');
+                        const normalizedName = this.activeCustomerName.trim().toLowerCase();
+                        const customer = this.customers.find(c =>
+                            (normalizedPhone && (c.phone || '').replace(/\s+/g, '') === normalizedPhone) ||
+                            (!normalizedPhone && (c.name || '').trim().toLowerCase() === normalizedName)
+                        );
+                        if (customer) {
+                            customer.name = this.activeCustomerName.trim();
+                            customer.phone = this.activeCustomerPhone.trim();
+                            customer.address = this.activeCustomerAddress.trim() || customer.address || '';
+                            customer.totalOrders = Number(customer.totalOrders || 0) + 1;
+                            customer.totalSpent = Number(customer.totalSpent || 0) + Number(this.grandTotal);
+                        } else {
+                            this.customers.unshift({
+                                id: Date.now(), name: this.activeCustomerName.trim(),
+                                phone: this.activeCustomerPhone.trim(), address: this.activeCustomerAddress.trim(),
+                                totalOrders: 1, totalSpent: Number(this.grandTotal)
+                            });
+                        }
+                    }
 
                     this.triggerThermalPrint({
                         title: 'FINAL PAID RECEIPT',
