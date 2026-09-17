@@ -131,7 +131,7 @@
     <div id="app" class="h-full flex flex-col bg-[#16171b]">
 
         <!-- Authentication Screen (Only when users exist and not logged in) -->
-        <div v-if="users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
+        <div v-if="bootReady && users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
             <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
                 <img src="assets/images/logo.jpg" alt="Mughal-E-Azam Logo" class="w-24 h-24 mx-auto rounded-3xl border-2 border-amber-400 object-cover mb-4 shadow-lg">
 
@@ -172,7 +172,7 @@
 
 
         <!-- Main Header Bar -->
-        <header v-if="currentUser || users.length === 0" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
+        <header v-if="bootReady && (currentUser || users.length === 0)" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
             <!-- Top Branding & User Info Row -->
             <div class="h-16 px-6 flex items-center justify-between border-b border-[#252730]/60">
                 <div class="flex items-center space-x-3">
@@ -186,8 +186,8 @@
                 <div class="flex items-center space-x-3">
                     <div class="text-right pl-2 border-l border-[#2c2f3b]">
                         <div class="text-xs font-bold text-white flex items-center justify-end space-x-1">
-                            <span>{{ currentUser ? currentUser.name : 'System Owner' }}</span>
-                            <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-neu-accent/20 text-neu-accent ml-1">{{ currentUser ? currentUser.role : 'Admin' }}</span>
+                            <span>{{ currentUser ? currentUser.name : 'No account configured' }}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-neu-accent/20 text-neu-accent ml-1">{{ currentUser ? currentUser.role : 'Unrestricted' }}</span>
                         </div>
                         <div class="text-[10px] text-neu-muted">{{ currentTime }}</div>
                     </div>
@@ -268,7 +268,7 @@
             </div>
         </header>
 
-        <main v-if="currentUser || users.length === 0" class="flex-1 overflow-hidden relative">
+        <main v-if="bootReady && (currentUser || users.length === 0)" class="flex-1 overflow-hidden relative">
             <!-- Admin Panel Dedicated Page Tab -->
             <div v-show="currentTab === 'admin' && hasPermission('admin_dash')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262832]">
@@ -494,7 +494,7 @@
                                             <button @click="openEditUserModal(idx)" class="px-2.5 py-1 rounded-xl neu-button text-amber-400 hover:text-white text-xs">
                                                 <i class="fa-solid fa-pen-to-square"></i>
                                             </button>
-                                            <button v-if="users.length > 1 && u.username !== 'admin'" @click="deleteUser(idx)" class="px-2.5 py-1 rounded-xl neu-button text-neu-accent hover:text-white text-xs">
+                                            <button @click="deleteUser(idx)" class="px-2.5 py-1 rounded-xl neu-button text-neu-accent hover:text-white text-xs">
                                                 <i class="fa-solid fa-trash-can"></i>
                                             </button>
                                         </td>
@@ -527,6 +527,7 @@
                                     </button>
                                 </div>
                                 <select v-model="printerConfig.counterPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option value="" disabled>Select a discovered system printer</option>
                                     <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
                                 </select>
                             </div>
@@ -541,6 +542,7 @@
                                     </button>
                                 </div>
                                 <select v-model="printerConfig.kitchenPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option value="" disabled>Select a discovered system printer</option>
                                     <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
                                 </select>
                             </div>
@@ -564,6 +566,8 @@
                             </label>
 
                             <button @click="savePrinterSettings" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save Hardware Printer Setup</button>
+                            <p v-if="printerScanError" class="text-[11px] text-amber-400">{{ printerScanError }}</p>
+                            <p v-else-if="availablePrinters.length === 0" class="text-[11px] text-neu-muted">No printer drivers were found. Install or connect a printer, then scan again.</p>
                         </div>
                     </div>
                 </div>
@@ -602,7 +606,13 @@
                 <!-- Sub-tab 5: System Backup & Restore -->
                 <div v-show="adminSubTab === 'backup'" class="space-y-6">
                     <div class="neu-flat p-6 rounded-3xl border border-[#252833] max-w-2xl space-y-4">
-                        <h3 class="text-base font-bold text-white"><i class="fa-solid fa-database text-blue-400 mr-2"></i>Database Export & Import</h3>
+                        <h3 class="text-base font-bold text-white"><i class="fa-solid fa-database text-blue-400 mr-2"></i>Database Backup & Recovery</h3>
+                        <p class="text-xs text-neu-muted">Choose a folder on any drive. Every saved POS activity copies the live SQLite database there as <span class="font-mono">pos_backup_latest.sqlite</span>.</p>
+                        <div class="flex gap-2">
+                            <input readonly :value="backupDirectory || 'No custom backup folder selected'" class="flex-1 neu-input p-2.5 rounded-xl text-xs text-white outline-none">
+                            <button @click="chooseBackupDirectory" class="px-3 py-2 bg-blue-500 text-white font-bold rounded-xl text-xs">Select Custom Backup Folder</button>
+                        </div>
+                        <button @click="restoreFromDirectory" class="w-full py-2.5 bg-amber-500 text-white font-bold rounded-xl text-xs">Restore System from Directory</button>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                                 <span class="font-bold text-white block">Download System JSON Backup</span>
@@ -1790,6 +1800,7 @@
             data() {
                 return {
                     currentUser: null,
+                    bootReady: false,
                     loginForm: { username: '', password: '' },
                     loginError: '',
 
@@ -1813,6 +1824,8 @@
                     deliveryFeeInput: null,
 
                     availablePrinters: [],
+                    printerScanError: '',
+                    backupDirectory: '',
 
                     printerConfig: {
                         counterPrinterName: '',
@@ -2051,15 +2064,12 @@
                 }
             },
 
-            mounted() {
+            async mounted() {
                 this.updateClock();
                 setInterval(this.updateClock, 1000);
-                this.loadLocalStorageBackup();
-                this.detectSystemPrinters();
-
-                window.addEventListener('beforeunload', () => {
-                    this.saveLocalStorageBackup();
-                });
+                await this.loadPersistentData();
+                await this.detectSystemPrinters();
+                this.bootReady = true;
             },
 
             methods: {
@@ -2515,9 +2525,11 @@
                 async detectSystemPrinters() {
                     if (window.pywebview && window.pywebview.api && window.pywebview.api.get_system_printers) {
                         try {
-                            const res = await window.pywebview.api.get_system_printers();
-                            if (res && Array.isArray(res) && res.length > 0) {
-                                this.availablePrinters = res;
+                            const result = await window.pywebview.api.get_system_printers();
+                            const printers = Array.isArray(result) ? result : (result.printers || []);
+                            this.availablePrinters = printers;
+                            this.printerScanError = Array.isArray(result) ? '' : (result.error || '');
+                            if (printers.length > 0) {
                                 if (!this.availablePrinters.includes(this.printerConfig.counterPrinterName)) {
                                     this.printerConfig.counterPrinterName = this.availablePrinters[0];
                                 }
@@ -2532,25 +2544,16 @@
                 },
 
                 async testPrinterHardware(printerName, typeLabel) {
-                    if (window.pywebview && window.pywebview.api && window.pywebview.api.test_printer) {
-                        try {
-                            await window.pywebview.api.test_printer(printerName, typeLabel);
-                        } catch (e) {
-                            console.error('Error testing printer:', e);
-                        }
+                    if (!printerName) {
+                        this.showToast('Select a printer before running a test.');
+                        return;
                     }
-                    this.triggerThermalPrint({
-                        title: `TEST ${typeLabel.toUpperCase()}`,
-                        orderId: 'TEST-001',
-                        time: this.currentTime,
-                        tableName: 'Test Table 1',
-                        customerName: 'Test Customer',
-                        items: [{ name: 'Test Sample Item', qty: 1, price: 100 }],
-                        subtotal: 100,
-                        discount: 0,
-                        tax: 0,
-                        grandTotal: 100
-                    });
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.test_printer) {
+                        const result = await window.pywebview.api.test_printer(printerName, typeLabel);
+                        this.showToast(result.message);
+                        return;
+                    }
+                    this.showToast('Native printer service is unavailable.');
                 },
 
                 savePrinterSettings() {
@@ -2663,24 +2666,30 @@
                     this.showUserModal = true;
                 },
 
-                saveUser() {
+                async saveUser() {
                     if (!this.newUserForm.name || !this.newUserForm.username || !this.newUserForm.password) return;
-                    if (this.editingUserIndex !== null) {
-                        this.users[this.editingUserIndex] = { ...this.newUserForm };
-                        this.showToast('User account updated!');
-                    } else {
-                        this.users.push({ ...this.newUserForm });
-                        this.showToast('New user account created!');
+                    const existing = this.editingUserIndex !== null ? this.users[this.editingUserIndex] : null;
+                    if (!window.pywebview?.api?.save_user) {
+                        this.showToast('Database service is unavailable.');
+                        return;
                     }
+                    const result = await window.pywebview.api.save_user(this.newUserForm, existing ? existing.id : null);
+                    if (!result.ok) {
+                        this.showToast(result.error || 'Unable to save user.');
+                        return;
+                    }
+                    this.users = result.users;
                     this.showUserModal = false;
-                    this.saveLocalStorageBackup();
+                    this.showToast(existing ? 'User account updated and saved to disk!' : 'New user account saved to disk!');
                 },
 
-                deleteUser(idx) {
-                    if (confirm(`Are you sure you want to delete user "${this.users[idx].name}"?`)) {
-                        this.users.splice(idx, 1);
-                        this.saveLocalStorageBackup();
-                        this.showToast('User account removed!');
+                async deleteUser(idx) {
+                    const user = this.users[idx];
+                    if (!confirm(`Are you sure you want to delete user "${user.name}"?`)) return;
+                    const result = await window.pywebview.api.delete_user(user.id);
+                    if (result.ok) {
+                        this.users = result.users;
+                        this.showToast('User account removed from disk!');
                     }
                 },
 
@@ -2690,43 +2699,55 @@
                     this.showToast('Dish Recipes Saved');
                 },
 
-                saveLocalStorageBackup() {
-                    try {
-                        const state = {
-                            users: this.users,
-                            orderHistory: this.orderHistory,
-                            purchaseHistory: this.purchaseHistory,
-                            customers: this.customers,
-                            inventory: this.inventory,
-                            menuItems: this.menuItems,
-                            categories: this.categories,
-                            expenses: this.expenses,
-                            dailyOpeningCash: this.dailyOpeningCash,
-                            printerConfig: this.printerConfig
-                        };
-                        localStorage.setItem('mughal_pos_backup', JSON.stringify(state));
-                    } catch (e) {}
+                async saveLocalStorageBackup() {
+                    // Kept as the common activity hook, but writes the real SQLite state, never localStorage.
+                    if (!window.pywebview?.api?.save_state) return;
+                    const state = {
+                        orderHistory: this.orderHistory, purchaseHistory: this.purchaseHistory,
+                        customers: this.customers, inventory: this.inventory, menuItems: this.menuItems,
+                        categories: this.categories, expenses: this.expenses,
+                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig
+                    };
+                    await window.pywebview.api.save_state(state);
                 },
 
-                loadLocalStorageBackup() {
-                    try {
-                        const saved = localStorage.getItem('mughal_pos_backup');
-                        if (saved) {
-                            const parsed = JSON.parse(saved);
-                            if (parsed.users && parsed.users.length > 0) {
-                                this.users = parsed.users;
-                            }
-                            if (parsed.orderHistory) this.orderHistory = parsed.orderHistory;
-                            if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
-                            if (parsed.customers) this.customers = parsed.customers;
-                            if (parsed.inventory) this.inventory = parsed.inventory;
-                            if (parsed.menuItems) this.menuItems = parsed.menuItems;
-                            if (parsed.categories) this.categories = parsed.categories;
-                            if (parsed.expenses) this.expenses = parsed.expenses;
-                            if (parsed.dailyOpeningCash !== undefined) this.dailyOpeningCash = parsed.dailyOpeningCash;
-                            if (parsed.printerConfig) this.printerConfig = parsed.printerConfig;
-                        }
-                    } catch (e) {}
+                async loadPersistentData() {
+                    if (!window.pywebview?.api?.get_boot_data) return;
+                    const boot = await window.pywebview.api.get_boot_data();
+                    this.users = boot.users || [];
+                    const saved = boot.state || {};
+                    if (saved.orderHistory) this.orderHistory = saved.orderHistory;
+                    if (saved.purchaseHistory) this.purchaseHistory = saved.purchaseHistory;
+                    if (saved.customers) this.customers = saved.customers;
+                    if (saved.inventory) this.inventory = saved.inventory;
+                    if (saved.menuItems) this.menuItems = saved.menuItems;
+                    if (saved.categories) this.categories = saved.categories;
+                    if (saved.expenses) this.expenses = saved.expenses;
+                    if (saved.dailyOpeningCash !== undefined) this.dailyOpeningCash = saved.dailyOpeningCash;
+                    if (saved.printerConfig) this.printerConfig = saved.printerConfig;
+                    this.backupDirectory = await window.pywebview.api.get_backup_directory();
+                },
+
+                async chooseBackupDirectory() {
+                    const result = await window.pywebview.api.select_backup_folder();
+                    if (result.ok) {
+                        this.backupDirectory = result.directory;
+                        this.showToast('Backup folder selected. A current database copy was created.');
+                    }
+                },
+
+                async restoreFromDirectory() {
+                    if (!confirm('Restore the database from a backup folder? Current data will be replaced.')) return;
+                    const result = await window.pywebview.api.restore_from_directory();
+                    if (!result.ok) {
+                        if (!result.cancelled) this.showToast(result.error || 'Restore failed.');
+                        return;
+                    }
+                    this.users = result.boot.users || [];
+                    const saved = result.boot.state || {};
+                    Object.keys(saved).forEach(key => { if (key in this.$data) this[key] = saved[key]; });
+                    this.currentUser = null;
+                    this.showToast('Database restored. Please sign in.');
                 },
 
                 exportBackupFile() {
