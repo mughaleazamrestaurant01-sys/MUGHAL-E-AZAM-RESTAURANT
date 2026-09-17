@@ -95,6 +95,11 @@
             background: #ff4d5a;
         }
 
+        @page {
+            size: auto;
+            margin: 0mm;
+        }
+
         @media print {
             body * {
                 visibility: hidden !important;
@@ -107,9 +112,14 @@
                 left: 0 !important;
                 top: 0 !important;
                 width: 80mm !important;
+                height: fit-content !important;
+                max-height: fit-content !important;
+                overflow: hidden !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
                 color: black !important;
                 background: white !important;
-                padding: 10px !important;
+                padding: 5px 10px !important;
                 font-family: 'Courier New', Courier, monospace !important;
                 font-size: 11px !important;
             }
@@ -233,6 +243,13 @@
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'inventory'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
                     <i class="fa-solid fa-boxes-stacked text-amber-400"></i>
                     <span>Stock</span>
+                </button>
+
+                <!-- Purchasing Tab -->
+                <button v-if="hasPermission('inventory')" @click="currentTab = 'purchasing'"
+                    :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'purchasing'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
+                    <i class="fa-solid fa-cart-flatbed text-emerald-400"></i>
+                    <span>Purchasing</span>
                 </button>
 
                 <!-- 5th Tab: Tables -->
@@ -593,7 +610,6 @@
                 </div>
 
             </div>
-        </div>
 
             <!-- Terminal Tab (Default Main View) -->
             <div v-show="currentTab === 'pos' && hasPermission('pos')" class="h-full flex flex-col md:flex-row p-4 gap-4">
@@ -964,6 +980,136 @@
                 </div>
             </div>
 
+            <!-- Purchasing Tab Module -->
+            <div v-show="currentTab === 'purchasing' && hasPermission('inventory')" class="h-full p-6 overflow-y-auto space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold font-royal text-white">Stock Purchasing & Supply Logging</h2>
+                        <p class="text-xs text-neu-muted">Search stock ingredients, log newly bought inventory supplies, and auto-update stock levels</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Form: Record New Purchased Stock -->
+                    <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                            <i class="fa-solid fa-cart-plus text-emerald-400"></i>
+                            <span>Record Purchased Supply</span>
+                        </h3>
+
+                        <form @submit.prevent="recordStockPurchase" class="space-y-3 text-xs">
+                            <div>
+                                <label class="text-neu-muted block mb-1">Select Ingredient Item</label>
+                                <select v-model="purchaseForm.ingredientId" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                    <option value="" disabled>Choose stock item...</option>
+                                    <option v-for="ing in inventory" :key="ing.id" :value="ing.id">
+                                        {{ ing.name }} (Current: {{ ing.qty }} {{ ing.unit }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Purchased Qty</label>
+                                    <input type="number" step="0.01" min="0.01" v-model.number="purchaseForm.qty" placeholder="Qty added" required class="w-full neu-input p-2.5 rounded-xl text-emerald-400 font-bold outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Unit Cost (Rs.)</label>
+                                    <input type="number" min="0" v-model.number="purchaseForm.unitCost" placeholder="Unit cost" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-neu-muted block mb-1">Supplier / Notes</label>
+                                <input type="text" v-model="purchaseForm.supplier" placeholder="e.g. Metro WholeSale / Invoice #102" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            </div>
+
+                            <button type="submit" class="w-full py-3 bg-emerald-500 text-white font-bold rounded-xl shadow hover:bg-emerald-600 transition mt-2 flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-square-plus"></i>
+                                <span>Record Purchase & Update Real Stock</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right Column: Search Stock & Purchase History Log -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <!-- Search & Quick Inventory View Card -->
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                                <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                                    <i class="fa-solid fa-boxes-stacked text-amber-400"></i>
+                                    <span>Stock Item Lookup</span>
+                                </h3>
+                                <div class="relative w-full sm:w-64">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-neu-muted text-xs"></i>
+                                    <input type="text" v-model="purchaseSearchQuery" placeholder="Search ingredient name..." class="w-full neu-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white outline-none">
+                                </div>
+                            </div>
+
+                            <div class="overflow-x-auto max-h-48 overflow-y-auto">
+                                <table class="w-full text-left text-xs text-neu-text">
+                                    <thead class="bg-[#18191d] neu-pressed text-neu-muted uppercase text-[10px]">
+                                        <tr>
+                                            <th class="p-2.5 rounded-l-xl">Ingredient Name</th>
+                                            <th class="p-2.5">Current Real Stock</th>
+                                            <th class="p-2.5">Unit</th>
+                                            <th class="p-2.5 rounded-r-xl">Current Cost (Rs.)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-[#252833]">
+                                        <tr v-for="item in filteredPurchaseStockItems" :key="item.id" class="hover:bg-[#1f2129]">
+                                            <td class="p-2.5 font-bold text-white">{{ item.name }}</td>
+                                            <td class="p-2.5 font-bold" :class="item.qty <= item.minStock ? 'text-neu-accent' : 'text-emerald-400'">
+                                                {{ item.qty }}
+                                            </td>
+                                            <td class="p-2.5 text-neu-muted">{{ item.unit }}</td>
+                                            <td class="p-2.5 text-white">Rs. {{ item.unitCost }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Purchased Supplies History Table -->
+                        <div class="neu-flat p-6 rounded-3xl border border-[#252833] space-y-4">
+                            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                                <i class="fa-solid fa-clock-rotate-left text-blue-400"></i>
+                                <span>Recent Purchase History Log</span>
+                            </h3>
+
+                            <div v-if="purchaseHistory.length === 0" class="p-6 text-center text-neu-muted text-xs">
+                                No purchases recorded yet.
+                            </div>
+
+                            <div v-else class="overflow-x-auto max-h-56 overflow-y-auto">
+                                <table class="w-full text-left text-xs text-neu-text">
+                                    <thead class="bg-[#18191d] neu-pressed text-neu-muted uppercase text-[10px]">
+                                        <tr>
+                                            <th class="p-2.5 rounded-l-xl">Date & Time</th>
+                                            <th class="p-2.5">Item Name</th>
+                                            <th class="p-2.5">Qty Added</th>
+                                            <th class="p-2.5">Unit Cost</th>
+                                            <th class="p-2.5">Total Expense</th>
+                                            <th class="p-2.5 rounded-r-xl">Supplier / Note</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-[#252833]">
+                                        <tr v-for="p in purchaseHistory" :key="p.id" class="hover:bg-[#1f2129]">
+                                            <td class="p-2.5 text-neu-muted font-mono text-[11px]">{{ p.date }} {{ p.time }}</td>
+                                            <td class="p-2.5 font-bold text-white">{{ p.itemName }}</td>
+                                            <td class="p-2.5 font-bold text-emerald-400">+{{ p.qty }} {{ p.unit }}</td>
+                                            <td class="p-2.5 text-white">Rs. {{ p.unitCost }}</td>
+                                            <td class="p-2.5 font-bold text-amber-400">Rs. {{ p.qty * p.unitCost }}</td>
+                                            <td class="p-2.5 text-neu-muted">{{ p.supplier || 'N/A' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- History Tab -->
             <div v-show="currentTab === 'history' && hasPermission('history')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1140,7 +1286,7 @@
         <!-- Printable Thermal Receipt Area -->
         <div id="printable-area" class="hidden print:block">
             <div class="text-center font-bold text-base uppercase border-b pb-1 mb-2">
-                MUGHAL-E-AZAM - RESTAURANT
+                {{ printerConfig.receiptHeader || 'MUGHAL-E-AZAM - RESTAURANT' }}
             </div>
             <div class="text-xs mb-2">
                 <div>Type: <b>{{ printableReceipt.title || 'RECEIPT' }}</b></div>
@@ -1162,7 +1308,7 @@
                 <div class="flex justify-between font-bold text-sm border-t pt-1 mt-1"><span>Total:</span><span>Rs. {{ printableReceipt.grandTotal }}</span></div>
             </div>
             <div class="text-center text-[10px] mt-4 pt-2 border-t">
-                Thank you for dining at Mughal-E-Azam - Restaurant!
+                {{ printerConfig.receiptFooter || 'Thank you for dining at Mughal-E-Azam - Restaurant!' }}
             </div>
         </div>
 
@@ -1556,13 +1702,6 @@
             </div>
         </div>
 
-        <!-- Toast Notifications -->
-        <transition name="fade">
-            <div v-if="toastMessage" class="fixed bottom-6 right-6 bg-neu-accent text-white text-xs px-5 py-3 rounded-2xl neu-accent-glow font-bold z-50 flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>{{ toastMessage }}</span>
-            </div>
-        </transition>
 
     </div>
 
@@ -1577,8 +1716,7 @@
                     loginError: '',
 
                     users: [
-                        { name: 'Shehenshah A.', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] },
-                        { name: 'Tariq Cashier', username: 'cashier', password: '123', role: 'Cashier', permissions: ['pos', 'tables', 'history'] }
+                        { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
                     ],
 
                     currentTab: 'pos', // Terminal set as default main page
@@ -1600,6 +1738,8 @@
                     printerConfig: {
                         counterPrinterName: 'Thermal Counter POS Printer (80mm)',
                         kitchenPrinterName: 'Kitchen Ticket Printer (80mm)',
+                        receiptHeader: 'MUGHAL-E-AZAM - RESTAURANT',
+                        receiptFooter: 'Thank you for dining at Mughal-E-Azam - Restaurant!',
                         autoPrintKitchen: true
                     },
 
@@ -1634,6 +1774,10 @@
                     toastMessage: '',
                     selectedHistoryDate: new Date().toISOString().split('T')[0],
 
+                    purchaseSearchQuery: '',
+                    purchaseForm: { ingredientId: '', qty: null, unitCost: null, supplier: '' },
+                    purchaseHistory: [],
+
                     newExpenseForm: { title: '', amount: null },
                     newStockForm: { name: '', unit: 'kg', qty: 0, unitCost: 0 },
                     newDishForm: { name: '', code: '', category: '', price: null, desc: '' },
@@ -1645,25 +1789,9 @@
                         { id: 'all', name: 'All Items', icon: '👑', allowDiscount: false }
                     ],
 
-                    inventory: [
-                        { id: 1, name: 'Burger Buns', unit: 'pcs', qty: 100, unitCost: 25, minStock: 20 },
-                        { id: 2, name: 'Chicken Meat', unit: 'kg', qty: 50, unitCost: 650, minStock: 5 }
-                    ],
+                    inventory: [],
 
-                    menuItems: [
-                        {
-                            id: 1, code: 'FF01', name: 'Royal Zinger Burger', category: 'fastfood', price: 480, desc: 'Crispy fried chicken breast fillet in soft bun',
-                            recipe: [{ ingredientId: 1, qty: 1 }, { ingredientId: 2, qty: 0.2 }]
-                        },
-                        {
-                            id: 2, code: 'BBQ01', name: 'Chicken Tikka Boti', category: 'bbq', price: 650, desc: 'Smoky spiced chargrilled chicken boti',
-                            recipe: [{ ingredientId: 2, qty: 0.35 }]
-                        },
-                        {
-                            id: 3, code: 'DRK01', name: 'Cold Drink Bottle 1.5L', category: 'drinks', price: 180, desc: 'Chilled beverage',
-                            recipe: []
-                        }
-                    ],
+                    menuItems: [],
 
                     cart: [],
 
@@ -1696,6 +1824,12 @@
                     return this.menuItems.filter(item => {
                         return item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q);
                     });
+                },
+
+                filteredPurchaseStockItems() {
+                    if (!this.purchaseSearchQuery) return this.inventory;
+                    const q = this.purchaseSearchQuery.toLowerCase().trim();
+                    return this.inventory.filter(item => item.name.toLowerCase().includes(q));
                 },
 
                 subtotal() {
@@ -2255,6 +2389,50 @@
                     this.showToast('Expense recorded');
                 },
 
+                recordStockPurchase() {
+                    if (!this.purchaseForm.ingredientId || !this.purchaseForm.qty || this.purchaseForm.qty <= 0) {
+                        this.showToast('Please select an ingredient and enter a valid quantity.');
+                        return;
+                    }
+
+                    const targetItem = this.inventory.find(i => i.id === this.purchaseForm.ingredientId);
+                    if (targetItem) {
+                        const addedQty = Number(this.purchaseForm.qty);
+                        const newCost = Number(this.purchaseForm.unitCost || targetItem.unitCost);
+
+                        targetItem.qty += addedQty;
+                        targetItem.unitCost = newCost;
+
+                        const now = new Date();
+                        const newPurchaseRecord = {
+                            id: Date.now(),
+                            date: now.toISOString().split('T')[0],
+                            time: this.currentTime,
+                            ingredientId: targetItem.id,
+                            itemName: targetItem.name,
+                            unit: targetItem.unit,
+                            qty: addedQty,
+                            unitCost: newCost,
+                            supplier: this.purchaseForm.supplier || 'Direct Purchase'
+                        };
+
+                        this.purchaseHistory.unshift(newPurchaseRecord);
+
+                        // Automatically log as store expense for total purchase cost
+                        const totalCost = addedQty * newCost;
+                        this.expenses.unshift({
+                            id: Date.now() + 1,
+                            title: `Stock Purchase: ${targetItem.name} (${addedQty} ${targetItem.unit})`,
+                            amount: totalCost,
+                            date: now.toISOString().split('T')[0]
+                        });
+
+                        this.purchaseForm = { ingredientId: '', qty: null, unitCost: null, supplier: '' };
+                        this.saveLocalStorageBackup();
+                        this.showToast(`Updated stock: +${addedQty} ${targetItem.unit} of ${targetItem.name}`);
+                    }
+                },
+
                 saveNewStock() {
                     if (!this.newStockForm.name) return;
                     this.inventory.push({
@@ -2333,6 +2511,7 @@
                         const state = {
                             users: this.users,
                             orderHistory: this.orderHistory,
+                            purchaseHistory: this.purchaseHistory,
                             customers: this.customers,
                             inventory: this.inventory,
                             menuItems: this.menuItems,
@@ -2352,6 +2531,7 @@
                             const parsed = JSON.parse(saved);
                             if (parsed.users) this.users = parsed.users;
                             if (parsed.orderHistory) this.orderHistory = parsed.orderHistory;
+                            if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
                             if (parsed.customers) this.customers = parsed.customers;
                             if (parsed.inventory) this.inventory = parsed.inventory;
                             if (parsed.menuItems) this.menuItems = parsed.menuItems;
@@ -2468,8 +2648,7 @@
                 },
 
                 showToast(msg) {
-                    this.toastMessage = msg;
-                    setTimeout(() => { this.toastMessage = ''; }, 3000);
+                    // Toast notifications disabled per user request
                 }
             }
         }).mount('#app');
