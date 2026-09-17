@@ -1823,19 +1823,12 @@
         createApp({
             data() {
                 return {
-                    currentUser: {
-                        name: 'System Administrator',
-                        username: 'admin',
-                        role: 'Admin',
-                        permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash']
-                    },
+                    currentUser: null,
                     loginForm: { username: '', password: '' },
                     loginError: '',
                     initialOwnerForm: { name: '', username: '', password: '' },
 
-                    users: [
-                        { name: 'System Administrator', username: 'admin', password: '123', role: 'Admin', permissions: ['pos', 'inventory', 'history', 'customers', 'tables', 'kds', 'admin_dash'] }
-                    ],
+                    users: [],
 
                     currentTab: 'pos', // Terminal set as default main page
                     searchQuery: '',
@@ -2759,7 +2752,9 @@
                         const saved = localStorage.getItem('mughal_pos_backup');
                         if (saved) {
                             const parsed = JSON.parse(saved);
-                            if (parsed.users) this.users = parsed.users;
+                            if (parsed.users && parsed.users.length > 0) {
+                                this.users = parsed.users;
+                            }
                             if (parsed.orderHistory) this.orderHistory = parsed.orderHistory;
                             if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
                             if (parsed.customers) this.customers = parsed.customers;
