@@ -52,6 +52,31 @@ def acquire_single_instance():
     return mutex
 
 
+class LocalAssetHandler(http.server.SimpleHTTPRequestHandler):
+    """Quiet local-only asset handler for the embedded POS WebView."""
+
+    def log_message(self, format, *args):
+        return
+
+    def end_headers(self):
+        self.send_header('Cache-Control', 'public, max-age=86400')
+        super().end_headers()
+
+
+def start_local_asset_server():
+    """Serve bundled files from an ephemeral loopback port before opening WebView."""
+    handler = lambda *args, **kwargs: LocalAssetHandler(*args, directory=get_base_dir(), **kwargs)
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+    server.daemon_threads = True
+    thread = threading.Thread(target=server.serve_forever, name='pos-local-assets', daemon=True)
+    thread.start()
+    if not thread.is_alive():
+        server.server_close()
+        raise RuntimeError('The local POS asset service did not start.')
+    host, port = server.server_address[:2]
+    return server, f'http://{host}:{port}/index.html'
+
+
 class Api:
     def __init__(self, database_path):
         self.database_path = database_path
@@ -320,12 +345,23 @@ class Api:
             value = str(value or '')[:width]
             return value.center(width)
 
+        def wrapped(value, prefix=''):
+            """Keep every receipt field visible on its own 32-column line."""
+            value = str(value or '').strip()
+            if not value:
+                return []
+            available = max(1, width - len(prefix))
+            return [prefix + value[position:position + available] for position in range(0, len(value), available)]
+
+        def centered(value):
+            return [center(part) for part in wrapped(value)]
+
         def line(left='', right=''):
             left, right = str(left), str(right)
             return left[:width - len(right) - 1] + ' ' * max(1, width - len(left[:width - len(right) - 1]) - len(right)) + right
 
         if is_kot:
-            lines = [center('*** KITCHEN TICKET ***'), '=' * width]
+            lines = [*centered('*** KITCHEN TICKET ***'), '=' * width]
             if receipt_data.get('tableName'):
                 lines.extend([center(f"TABLE: {receipt_data['tableName']}"), '-' * width])
             lines.append(f"KOT NO : {receipt_data.get('orderId', '')}")
@@ -336,23 +372,20 @@ class Api:
             lines.extend(['=' * width, line('ITEM DESCRIPTION', 'QTY'), '=' * width])
             for item in receipt_data.get('items', []):
                 lines.append(line(str(item.get('name', '')).upper(), f"{item.get('qty', 0)}x"))
-            lines.extend(['=' * width, center('[ END OF ORDER - COOK PROMPTLY ]')])
+            lines.extend(['=' * width, *centered('[ END OF ORDER - COOK PROMPTLY ]')])
         else:
             order_type = receipt_data.get('orderType', '')
             is_preview = receipt_data.get('isPreview', False)
             is_delivery = order_type == 'Delivery'
             is_takeaway = order_type == 'Takeaway'
             payment_method = receipt_data.get('paymentMethod', '')
-            lines = [
-                center(receipt_data.get('restaurantName') or receipt_data.get('header') or 'MUGHAL-E-AZAM RESTAURANT'),
-                center(receipt_data.get('restaurantAddress')),
-                center(receipt_data.get('restaurantPhone')),
-                '=' * width,
-                center(receipt_data.get('title', 'RECEIPT')),
-                '=' * width,
-            ]
+            lines = centered(receipt_data.get('restaurantName') or receipt_data.get('header') or 'MUGHAL-E-AZAM RESTAURANT')
+            lines.extend(centered(receipt_data.get('restaurantTagline')))
+            lines.extend(centered(receipt_data.get('restaurantAddress')))
+            lines.extend(centered(receipt_data.get('restaurantPhone')))
+            lines.extend(['=' * width, *centered(receipt_data.get('title', 'RECEIPT')), '=' * width])
             if is_takeaway:
-                lines.extend([center(f"TOKEN: #{receipt_data.get('orderId', '')}"), '-' * width])
+                lines.extend([*centered(f"TOKEN: #{receipt_data.get('orderId', '')}"), '-' * width])
             lines.append(f"{'ORD NO' if is_delivery else 'INV NO'} : {receipt_data.get('orderId', '')}")
             if receipt_data.get('time'):
                 lines.append(f"DATE   : {receipt_data['time']}")
@@ -373,7 +406,7 @@ class Api:
                     lines.append(f"TEL  : {receipt_data['customerPhone']}")
                 if receipt_data.get('customerAddress'):
                     lines.append('ADDR :')
-                    lines.extend(str(receipt_data['customerAddress'])[i:i + width] for i in range(0, len(str(receipt_data['customerAddress'])), width))
+                    lines.extend(wrapped(receipt_data['customerAddress']))
             lines.extend(['-' * width, line('QTY DESCRIPTION', 'PRICE (RS.)'), '-' * width])
             for item in receipt_data.get('items', []):
                 qty, name, price = item.get('qty', 0), item.get('name', ''), item.get('price', 0)
@@ -394,7 +427,8 @@ class Api:
                 closing = '* CASH ON DELIVERY (COD) *\nDRIVER: PLEASE COLLECT EXACT AMOUNT'
             else:
                 closing = receipt_data.get('receiptFooter') or 'THANK YOU FOR YOUR VISIT!\nPLEASE COME AGAIN'
-            lines.extend(center(part) for part in closing.split('\n'))
+            for part in closing.split('\n'):
+                lines.extend(centered(part))
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
         # The Star Windows driver can perform a configured Document Bottom cut, but
@@ -617,17 +651,20 @@ def main():
     if instance_lock is None:
         return
 
-    # Everything needed by the interface is local and bundled. Loading index.html
-    # directly avoids starting a second HTTP service, selecting a port, and making
-    # a loopback browser request during each desktop launch.
-    local_html = os.path.join(get_base_dir(), 'index.html')
     api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
+    asset_server = None
     if args.share_lan:
         threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
     try:
+        # A loopback HTTP origin is more reliable than file:// in Windows WebView
+        # runtimes and lets the browser load bundled scripts/fonts consistently.
+        asset_server, app_url = start_local_asset_server()
+        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', app_url, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
         webview.start()
     finally:
+        if asset_server:
+            asset_server.shutdown()
+            asset_server.server_close()
         if sys.platform == 'win32':
             import ctypes
             ctypes.windll.kernel32.CloseHandle(instance_lock)
