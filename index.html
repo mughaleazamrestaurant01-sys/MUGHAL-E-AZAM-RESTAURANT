@@ -701,6 +701,13 @@
                                     <textarea v-model="printerConfig.receiptFooter" rows="2" placeholder="Thank you for choosing Mughal-E-Azam." class="w-full neu-input p-2 rounded-xl text-white outline-none"></textarea>
                                 </div>
                                 <div>
+                                    <label class="text-neu-muted block mb-1">Receipt Paper Width</label>
+                                    <select v-model="printerConfig.paperWidth" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                        <option value="80mm">80mm Paper Width (48 Columns — Standard Thermal)</option>
+                                        <option value="58mm">58mm Paper Width (32 Columns — Narrow Thermal)</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label class="text-neu-muted block mb-1">Counter Printer Cut Command</label>
                                     <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2 rounded-xl text-white outline-none">
                                         <option value="star_full">Windows Star driver — use Document Bottom cut (recommended)</option>
@@ -2058,6 +2065,7 @@
                         restaurantPhone: '',
                         receiptFooter: 'Thank you for choosing Mughal-E-Azam. We look forward to serving you again!',
                         receiptCutMode: 'star_full',
+                        paperWidth: '80mm',
                         autoPrintKitchen: true // The Kitchen KOT button is the only action that sends a KOT.
                     },
 
@@ -2904,9 +2912,12 @@
                                 restaurantAddress: this.printerConfig.restaurantAddress,
                                 restaurantPhone: this.printerConfig.restaurantPhone,
                                 receiptFooter: this.printerConfig.receiptFooter,
+                                paperWidth: this.printerConfig.paperWidth || '80mm',
                                 cutMode: data.isKot ? 'escpos_full' : this.printerConfig.receiptCutMode
                             };
-                            const result = await window.posApi.print_direct(target, payload);
+                            const printPromise = window.posApi.print_direct(target, payload);
+                            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ status: 'timeout', message: 'Print request timed out. Check printer status.' }), 6000));
+                            const result = await Promise.race([printPromise, timeoutPromise]);
                             if (result.status !== 'success') {
                                 this.showToast(result.message || 'Printer did not accept the job.');
                             }
