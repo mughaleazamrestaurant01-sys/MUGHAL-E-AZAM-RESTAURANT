@@ -1,6 +1,6 @@
 # POS hardening and completion plan
 
-## Review status: completed
+## Review status: single-computer POS completed; shared two-computer POS not yet built
 
 This document was reviewed against the active desktop entry point (`index.html`) and
 the native Python bridge (`app.py`). The stale observations in the previous version
@@ -49,6 +49,76 @@ have been replaced with the current implementation status.
   second administrator exists.
 - A whitespace check found no patch errors.
 
+## Confirmed restaurant setup and requirements
+
+The requested installation is a **two-computer shared POS** on an existing wired
+Ethernet LAN. Mobile ordering is deliberately out of scope for now.
+
+| Device | Operating system | Required use | Local receipt printer |
+| --- | --- | --- | --- |
+| Main counter PC | Windows 10 | Runs all day; central server, dine-in/counter POS, administration, reports | Star TSP700II / TSP743II (USB) |
+| Evening laptop | Windows 11 | Takeaway and delivery POS from 6 PM to 11 PM | SRP-352 Plus (USB) |
+| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; exact IP still required) |
+
+Both computers and the kitchen printer are already connected to the same router by
+Ethernet. The administrator will create the laptop user's account and choose its
+permissions inside the POS.
+
+### Required shared behaviour
+
+1. Both computers must read and write one shared set of users, menu, recipes,
+   stock, customers, orders, invoices, reports, KDS tickets, and tables.
+2. A table made busy on either computer must become busy on the other computer
+   promptly, before it can be selected for another order.
+3. A takeaway/delivery order entered on the laptop must promptly appear on the main
+   counter PC, including sales, customer, inventory, and history data.
+4. The main PC prints customer receipts only to its Star USB printer; the laptop
+   prints customer receipts only to its SRP-352 Plus USB printer.
+5. Both PCs must be able to send a KOT to the same kitchen network printer, but
+   only after the operator explicitly clicks the **Kitchen KOT** button. Completing
+   payment and printing a provisional bill must not create a KOT.
+6. The main counter PC must stay powered on while the laptop is in use. Internet is
+   not required for this local-LAN system.
+
+## Shared two-computer feature: current progress
+
+**Implementation progress: 0% of the shared two-computer feature.** The current
+application is a local desktop POS only. Each installation selects its own data
+directory and opens its own `database.sqlite`, so the main PC and laptop currently
+have separate data and cannot show each other's tables, orders, stock, or users.
+
+Some existing local features can be reused later (accounts, printer selection, KOT
+button, receipts, inventory, and local backups), but they do **not** provide network
+sharing. In particular, the current Python bridge is exposed only to its own local
+desktop window and starts an HTTP server on `127.0.0.1`; it is not a LAN API server.
+Do not share the current SQLite database file through a Windows folder or network
+drive: SQLite over a network share is not a safe solution for simultaneous POS use.
+
+### Build plan before the laptop is connected
+
+1. **Central server and database:** run a proper server service on the main counter
+   PC and move shared operational data to PostgreSQL (recommended) or another
+   supported network database. The service must bind only to the restaurant LAN and
+   require authenticated requests.
+2. **Desktop client mode:** make both POS installations connect to that server rather
+   than opening their own local SQLite operational database. Keep each PC's printer
+   selection local to that PC.
+3. **Safe transactions:** make order creation, recipe deduction, invoice numbering,
+   table status, KDS changes, and user edits atomic on the server so two operators
+   cannot overwrite each other or sell the same stock twice.
+4. **Live synchronisation:** add server-driven updates or short safe polling so the
+   other screen sees table/KDS/order changes promptly. Include reconnect and offline
+   messages; do not silently save an offline laptop order to a different local
+   database.
+5. **Kitchen printer installation:** reserve a fixed DHCP address for the XSP-210 in
+   the router, install its Windows network/TCP-IP queue on both PCs, then select
+   that queue as the kitchen printer on each PC. Its exact IP address and driver
+   still need to be confirmed on site.
+6. **End-to-end acceptance test:** use both PCs at the same time to test busy-table
+   blocking, laptop delivery orders, KOT-only printing from each PC, each local
+   receipt printer, stock deduction, simultaneous saves, restart/reconnect, backup,
+   and recovery.
+
 ## Remaining operational considerations
 
 These are not placeholder or dummy features, but are sensible future enhancements:
@@ -61,6 +131,6 @@ These are not placeholder or dummy features, but are sensible future enhancement
    post-receipt paper feed.
 3. **JSON backups intentionally exclude accounts.** Use the native SQLite folder
    backup whenever user accounts must be moved or recovered too.
-4. **Single-terminal design.** State is stored in one local SQLite database. A
-   multi-terminal restaurant deployment would need a shared server, transactional
-   concurrency controls, and role authorization enforced at that server boundary.
+4. **Shared-POS dependency.** The two-computer feature must be built and tested
+   before the laptop is used as a live second terminal. Until then, it remains a
+   separate local POS installation and must not be treated as synchronized.
