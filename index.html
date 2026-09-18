@@ -2154,14 +2154,16 @@
                     }
                     try {
                         await this.loadPersistentData();
-                        await this.detectSystemPrinters();
                     } catch (error) {
                         console.error('POS startup failed:', error);
-                        this.bootError = 'Unable to open the saved POS database.';
+                        this.bootError = error?.message || 'Unable to open the saved POS database.';
                         return;
                     }
+                    // Printer enumeration can be slow when Windows probes an offline
+                    // network queue. Do not keep the POS loading screen open for it.
                     this.bootReady = true;
                     this.persistenceReady = true;
+                    this.detectSystemPrinters().catch(error => console.error('Printer detection failed:', error));
                 },
 
                 updateClock() {
@@ -2193,7 +2195,7 @@
                         orderHistory: this.orderHistory, purchaseHistory: this.purchaseHistory,
                         customers: this.customers, inventory: this.inventory, menuItems: this.menuItems,
                         categories: this.categories, expenses: this.expenses,
-                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig,
+                        dailyOpeningCash: this.dailyOpeningCash,
                         tables: this.tables, kdsOrders: this.kdsOrders, currentOrderId: this.currentOrderId,
                         cart: this.cart, orderType: this.orderType,
                         selectedTableId: this.selectedTable ? this.selectedTable.id : null,
@@ -2206,7 +2208,7 @@
 
                 queuePersistentSave() {
                     clearTimeout(this.persistenceTimer);
-                    this.persistenceTimer = setTimeout(() => this.saveLocalStorageBackup(), 400);
+                    this.persistenceTimer = setTimeout(() => this.saveLocalStorageBackup(), 700);
                 },
 
                 addToCart(item) {
@@ -2224,7 +2226,7 @@
                             qty: 1
                         });
                     }
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast(`Added ${item.name}`);
                 },
 
@@ -2233,7 +2235,7 @@
                     if (item.qty <= 0) {
                         this.cart = this.cart.filter(c => c.id !== item.id);
                     }
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                 },
 
                 clearCart() {
@@ -2241,7 +2243,7 @@
                     this.activeCustomerName = '';
                     this.activeCustomerPhone = '';
                     this.activeCustomerAddress = '';
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Cart cleared');
                 },
 
@@ -2289,7 +2291,7 @@
                     };
 
                     this.kdsOrders.unshift(newTicket);
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast(`Order #${this.currentOrderId} sent to Kitchen Queue!`);
                     if (this.printerConfig.autoPrintKitchen) {
                         this.triggerThermalPrint({
@@ -2306,7 +2308,7 @@
                             grandTotal: this.grandTotal
                         }, this.printerConfig.kitchenPrinterName);
                     }
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                 },
 
                 printProvisionalBill() {
@@ -2337,7 +2339,7 @@
                     });
 
                     this.newCategoryForm = { name: '', icon: '🍽️', allowDiscount: true };
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('New category added!');
                 },
 
@@ -2359,7 +2361,7 @@
                         cat.name = this.editCategoryForm.name;
                         cat.icon = this.editCategoryForm.icon || '🍽️';
                         cat.allowDiscount = !!this.editCategoryForm.allowDiscount;
-                        this.saveLocalStorageBackup();
+                        this.queuePersistentSave();
                         this.showToast('Category updated!');
                     }
                     this.showEditCategoryModal = false;
@@ -2373,7 +2375,7 @@
                         if (this.selectedCategory === catId) {
                             this.selectedCategory = 'all';
                         }
-                        this.saveLocalStorageBackup();
+                        this.queuePersistentSave();
                         this.showToast('Category deleted!');
                     }
                 },
@@ -2452,7 +2454,7 @@
                                     count++;
                                 }
                             });
-                            this.saveLocalStorageBackup();
+                            this.queuePersistentSave();
                             this.showToast(`Imported ${count} menu items from CSV!`);
                         } catch (err) {
                             this.showToast('Failed to parse CSV file.');
@@ -2485,7 +2487,7 @@
                                     count++;
                                 }
                             });
-                            this.saveLocalStorageBackup();
+                            this.queuePersistentSave();
                             this.showToast(`Imported ${count} stock items from CSV!`);
                         } catch (err) {
                             this.showToast('Failed to parse CSV file.');
@@ -2524,7 +2526,7 @@
                     });
 
                     this.newDishForm = { name: '', code: '', category: '', price: null, desc: '' };
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('New dish added to menu!');
                 },
 
@@ -2549,7 +2551,7 @@
                         item.category = this.editDishForm.category;
                         item.price = Number(this.editDishForm.price);
                         item.desc = this.editDishForm.desc;
-                        this.saveLocalStorageBackup();
+                        this.queuePersistentSave();
                         this.showToast('Menu item updated!');
                     }
                     this.showEditDishModal = false;
@@ -2558,7 +2560,7 @@
                 deleteMenuItem(id) {
                     if (!this.requirePermission('menu_manage')) return;
                     this.menuItems = this.menuItems.filter(m => m.id !== id);
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Menu item removed');
                 },
 
@@ -2668,7 +2670,7 @@
                     this.cashTendered = null;
                     this.currentOrderId = (parseInt(this.currentOrderId) + 1).toString();
 
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Paid Order Completed!');
                 },
 
@@ -2713,7 +2715,7 @@
 
                 saveOpeningCash() {
                     this.showOpeningBalanceModal = false;
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Daily Opening Cash Saved');
                 },
 
@@ -2751,10 +2753,10 @@
                     this.showToast('Native printer service is unavailable.');
                 },
 
-                savePrinterSettings() {
+                async savePrinterSettings() {
                     this.showPrinterSettingsModal = false;
-                    this.saveLocalStorageBackup();
-                    this.showToast('Printer Setup Saved');
+                    const result = await window.pywebview.api.save_printer_config(this.printerConfig);
+                    this.showToast(result.ok ? 'Printer Setup Saved' : (result.error || 'Unable to save printer setup.'));
                 },
 
                 saveExpense() {
@@ -2767,7 +2769,7 @@
                     });
                     this.newExpenseForm = { title: '', amount: null };
                     this.showAddExpenseModal = false;
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Expense recorded');
                 },
 
@@ -2811,7 +2813,7 @@
                         });
 
                         this.purchaseForm = { ingredientId: '', qty: null, unitCost: null, supplier: '' };
-                        this.saveLocalStorageBackup();
+                        this.queuePersistentSave();
                         this.showToast(`Updated stock: +${addedQty} ${targetItem.unit} of ${targetItem.name}`);
                     }
                 },
@@ -2829,14 +2831,14 @@
                     });
                     this.newStockForm = { name: '', unit: 'kg', qty: 0, unitCost: 0 };
                     this.showAddStockModal = false;
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Stock ingredient added');
                 },
 
                 deleteStockItem(id) {
                     if (!this.requirePermission('inventory')) return;
                     this.inventory = this.inventory.filter(i => i.id !== id);
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Ingredient removed');
                 },
 
@@ -2901,7 +2903,7 @@
                 saveRecipes() {
                     if (!this.requirePermission('menu_manage')) return;
                     this.showRecipeModal = false;
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast('Dish Recipes Saved');
                 },
 
@@ -2914,11 +2916,11 @@
                     this.persistenceChain = this.persistenceChain.catch(() => {}).then(async () => {
                         try {
                             const result = await window.pywebview.api.save_state(this.buildPersistentState());
-                            if (!result.ok) this.showToast('Unable to save POS data.');
+                            if (!result.ok) this.showToast(result.error || 'Unable to save POS data.');
                             else if (result.backupError) this.showToast(result.backupError);
                         } catch (error) {
                             console.error('POS state save failed:', error);
-                            this.showToast('Unable to save POS data.');
+                            this.showToast(error?.message || 'Unable to save POS data.');
                         }
                     });
                     return this.persistenceChain;
@@ -2927,6 +2929,9 @@
                 async loadPersistentData() {
                     if (!window.pywebview?.api?.get_boot_data) return;
                     const boot = await window.pywebview.api.get_boot_data();
+                    if (!boot || boot.ok === false) {
+                        throw new Error((boot && boot.error) || 'The POS data service did not return startup data.');
+                    }
                     this.users = boot.users || [];
                     const saved = boot.state || {};
                     if (saved.orderHistory) this.orderHistory = saved.orderHistory;
@@ -2937,7 +2942,8 @@
                     if (saved.categories) this.categories = saved.categories;
                     if (saved.expenses) this.expenses = saved.expenses;
                     if (saved.dailyOpeningCash !== undefined) this.dailyOpeningCash = saved.dailyOpeningCash;
-                    if (saved.printerConfig) this.printerConfig = saved.printerConfig;
+                    const localPrinterConfig = await window.pywebview.api.get_printer_config();
+                    if (localPrinterConfig && Object.keys(localPrinterConfig).length) this.printerConfig = { ...this.printerConfig, ...localPrinterConfig };
                     if (Array.isArray(saved.tables)) this.tables = saved.tables;
                     if (Array.isArray(saved.kdsOrders)) this.kdsOrders = saved.kdsOrders;
                     if (saved.currentOrderId) this.currentOrderId = String(saved.currentOrderId);
@@ -3053,7 +3059,7 @@
                             if (parsed.paymentMethod) this.paymentMethod = parsed.paymentMethod;
                             if (parsed.cashTendered !== undefined) this.cashTendered = parsed.cashTendered;
 
-                            this.saveLocalStorageBackup();
+                            this.queuePersistentSave();
                             this.showBackupModal = false;
                             this.showToast('Data restored!');
                         } catch (err) {
@@ -3162,7 +3168,7 @@
                     } else {
                         this.kdsOrders = this.kdsOrders.filter(o => o.id !== order.id);
                     }
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                 },
 
                 proceedToCheckout() {
@@ -3206,7 +3212,7 @@
                         });
                     }
                     this.showTableModal = false;
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                 },
 
                 deleteTable(tableId) {
@@ -3215,7 +3221,7 @@
                     if (this.selectedTable && this.selectedTable.id === tableId) {
                         this.selectedTable = null;
                     }
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                 },
 
                 clickTableCard(table) {
@@ -3241,14 +3247,14 @@
                     this.selectedTable = table;
                     this.orderType = 'Dine-In';
                     this.currentTab = 'pos';
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast(`Selected Table ${table.name}`);
                 },
 
                 releaseTable(table) {
                     if (!this.requirePermission('tables')) return;
                     table.status = 'Available';
-                    this.saveLocalStorageBackup();
+                    this.queuePersistentSave();
                     this.showToast(`${table.name} marked Available`);
                 },
 

@@ -69,7 +69,7 @@ Ethernet LAN. Mobile ordering is deliberately out of scope for now.
 | --- | --- | --- | --- |
 | Main counter PC | Windows 10 | Runs all day; central server, dine-in/counter POS, administration, reports | Star TSP700II / TSP743II (USB) |
 | Evening laptop | Windows 11 | Takeaway and delivery POS from 6 PM to 11 PM | SRP-352 Plus (USB) |
-| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; exact IP still required) |
+| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; reserved IP `192.168.10.220`) |
 
 Both computers and the kitchen printer are already connected to the same router by
 Ethernet. The administrator will create the laptop user's account and choose its
@@ -93,17 +93,20 @@ permissions inside the POS.
 
 ## Shared two-computer feature: current progress
 
-**Implementation progress: 0% of the shared two-computer feature.** The current
-application is a local desktop POS only. Each installation selects its own data
-directory and opens its own `database.sqlite`, so the main PC and laptop currently
-have separate data and cannot show each other's tables, orders, stock, or users.
+**Implementation progress: basic shared mode is implemented.** The main counter can
+serve its own local SQLite database through an authenticated LAN HTTP gateway, and
+the laptop can use that gateway instead of creating a second operational database.
+Both PCs therefore use the counter PC's users, menu, stock, orders, tables, KDS
+queue, reports, and customers. Receipt/KOT printer discovery and printing remain
+local to each PC.
 
-Some existing local features can be reused later (accounts, printer selection, KOT
-button, receipts, inventory, and local backups), but they do **not** provide network
-sharing. In particular, the current Python bridge is exposed only to its own local
-desktop window and starts an HTTP server on `127.0.0.1`; it is not a LAN API server.
-Do not share the current SQLite database file through a Windows folder or network
-drive: SQLite over a network share is not a safe solution for simultaneous POS use.
+Run the main counter application with `--share-lan --server-token <long-secret>`.
+Run the laptop with `--server-url http://<counter-LAN-IP>:8765 --server-token
+<same-long-secret>`. Permit inbound TCP 8765 only from the restaurant LAN in the
+counter PC's Windows Firewall. The token must be a long private value and must not
+be reused outside this restaurant. Do not share the SQLite file through a Windows
+folder or network drive: SQLite over a network share is not safe for simultaneous
+POS use.
 
 ### Build plan before the laptop is connected
 
@@ -123,8 +126,8 @@ drive: SQLite over a network share is not a safe solution for simultaneous POS u
    database.
 5. **Kitchen printer installation:** reserve a fixed DHCP address for the XSP-210 in
    the router, install its Windows network/TCP-IP queue on both PCs, then select
-   that queue as the kitchen printer on each PC. Its exact IP address and driver
-   still need to be confirmed on site.
+   that queue as the kitchen printer on each PC. Use its confirmed reserved IP
+   `192.168.10.220` and the XSP-210 driver when creating the TCP/IP queue on both PCs.
 6. **End-to-end acceptance test:** use both PCs at the same time to test busy-table
    blocking, laptop delivery orders, KOT-only printing from each PC, each local
    receipt printer, stock deduction, simultaneous saves, restart/reconnect, backup,
@@ -156,3 +159,42 @@ and installation process. Do not claim that the two PCs are synchronized, and do
 use a network-shared SQLite file as a shortcut. When adding a new screen or action,
 assign it to an existing permission and enforce that permission both in the visible
 UI and in its action method.
+
+## 2026-09-18 reliability work in progress
+
+- The reported generic “Unable to save POS data” notification is being addressed by
+  returning a concrete SQLite/serialization error from the bridge instead of letting
+  an exception become an opaque failed webview call.
+- Automatic folder backups are now rate-limited to once per minute. The previous
+  implementation made a full SQLite backup after every persisted UI update, which
+  could block the POS noticeably as order history grew. Explicit backup creation and
+  the first backup after choosing a folder remain immediate.
+- The shared two-computer feature is being implemented as an authenticated LAN API;
+  it will keep receipt-printer configuration local on each Windows computer while
+  operational POS data is owned by the main counter computer. A Windows network
+  share of SQLite remains unsupported.
+- A first usable LAN implementation is now present: start the counter application
+  with `--share-lan --server-token <long-secret>` and start the laptop with
+  `--server-url http://<counter-LAN-IP>:8765 --server-token <same-long-secret>`.
+  The laptop reads/writes the counter's database over an authenticated HTTP bridge,
+  while printer discovery and printing still occur on the laptop itself. The
+  implementation serializes database writes but is not yet a replacement for
+  purpose-built per-order transactional APIs; operators must not edit the same
+  unfinished order simultaneously.
+- Printer configuration is intentionally terminal-local: it is stored in each
+  installation's settings database and excluded from the shared operational state,
+  so laptop receipt/KOT choices cannot replace the counter PC's printer queues.
+- Save requests are now coalesced in the UI (700 ms debounce) rather than being
+  sent both by every action and by the deep state watcher. Automatic backup work
+  also runs after the SQLite write on a background thread, so a large backup cannot
+  hold the POS screen while it is saving an order.
+- The state bridge rejects malformed payloads with a descriptive result and the UI
+  displays a rejected bridge error message, making the next on-site failure
+  diagnosable rather than showing only the generic save toast.
+- The coalescing delay is set to 700 ms: frequent cart quantity changes and delivery
+  field edits are persisted as one final snapshot after the operator pauses, while
+  all normal order changes remain automatically saved.
+- Startup now unlocks the POS as soon as saved data is available. Printer enumeration
+  proceeds in the background because Windows can pause while probing unavailable
+  network printers; a printer scan no longer keeps the entire application on its
+  opening screen.

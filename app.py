@@ -10,8 +10,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+import argparse
 import http.server
 import socketserver
+import time
+import urllib.error
+import urllib.request
 
 import webview
 
@@ -52,6 +56,8 @@ class Api:
         self.database_path = database_path
         self.window = None
         self._database_lock = threading.RLock()
+        self._last_automatic_backup = 0.0
+        self._backup_in_progress = False
         self._initialize_database()
 
     def _connection(self):
@@ -113,11 +119,27 @@ class Api:
             return {'ok': False, 'error': f'Backup failed: {exc}'}
 
     def _backup_after_write(self):
+        """Schedule a backup without delaying the POS write/UI bridge response."""
         with self._connection() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'backup_directory'").fetchone()
         if not row or not row['value']:
             return {'ok': True, 'skipped': True}
-        return self._create_database_backup(row['value'])
+        with self._database_lock:
+            now = time.monotonic()
+            if self._backup_in_progress or now - self._last_automatic_backup < 60:
+                return {'ok': True, 'skipped': True}
+            self._last_automatic_backup = now
+            self._backup_in_progress = True
+
+        def backup_in_background():
+            try:
+                self._create_database_backup(row['value'])
+            finally:
+                with self._database_lock:
+                    self._backup_in_progress = False
+
+        threading.Thread(target=backup_in_background, daemon=True).start()
+        return {'ok': True, 'scheduled': True}
 
     def get_boot_data(self):
         """A fresh process deliberately has no session; only disk-backed users decide login."""
@@ -197,13 +219,39 @@ class Api:
 
     def save_state(self, state):
         # Users are intentionally excluded: they always use direct SQL writes above.
-        state = {key: value for key, value in state.items() if key != 'users'}
-        with self._database_lock:
+        try:
+            if not isinstance(state, dict):
+                return {'ok': False, 'error': 'POS data payload is invalid; expected an object.'}
+            state = {key: value for key, value in state.items() if key != 'users'}
+            encoded = json.dumps(state, ensure_ascii=False, separators=(',', ':'))
+            with self._database_lock:
+                with self._connection() as db:
+                    db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                               (encoded,))
+                backup = self._backup_after_write()
+            return {'ok': True, 'backupError': backup.get('error', '')}
+        except (TypeError, ValueError) as exc:
+            return {'ok': False, 'error': f'POS data cannot be encoded: {exc}'}
+        except sqlite3.Error as exc:
+            return {'ok': False, 'error': f'POS database write failed: {exc}'}
+        except Exception as exc:
+            return {'ok': False, 'error': f'POS data save failed: {exc}'}
+
+    def get_printer_config(self):
+        with self._connection() as db:
+            row = db.execute("SELECT value FROM settings WHERE key = 'printer_config'").fetchone()
+        try:
+            return json.loads(row['value']) if row else {}
+        except (TypeError, ValueError):
+            return {}
+
+    def save_printer_config(self, config):
+        try:
             with self._connection() as db:
-                db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                           (json.dumps(state),))
-            backup = self._backup_after_write()
-        return {'ok': True, 'backupError': backup.get('error', '')}
+                db.execute("INSERT INTO settings(key, value) VALUES ('printer_config', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(config),))
+            return {'ok': True}
+        except (TypeError, ValueError, sqlite3.Error) as exc:
+            return {'ok': False, 'error': f'Printer settings save failed: {exc}'}
 
     def get_system_printers(self):
         """Return installed system print queues; physical-device discovery is driver/OS-owned."""
@@ -325,10 +373,136 @@ class Api:
                 os.unlink(temporary)
 
 
+class SharedApiServer(http.server.ThreadingHTTPServer):
+    """Small authenticated LAN gateway for a counter-owned POS database."""
+    daemon_threads = True
+
+    def __init__(self, address, api, token):
+        self.api = api
+        self.token = token
+        super().__init__(address, SharedApiHandler)
+
+
+class SharedApiHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def _reply(self, status, payload):
+        encoded = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def _allowed(self):
+        return hmac.compare_digest(self.headers.get('X-POS-Token', ''), self.server.token)
+
+    def _body(self):
+        length = int(self.headers.get('Content-Length', 0))
+        return json.loads(self.rfile.read(length).decode('utf-8')) if length else {}
+
+    def do_GET(self):
+        if not self._allowed():
+            return self._reply(401, {'ok': False, 'error': 'Invalid shared POS token.'})
+        if self.path == '/v1/boot':
+            return self._reply(200, self.server.api.get_boot_data())
+        if self.path == '/v1/backup-directory':
+            return self._reply(200, {'directory': self.server.api.get_backup_directory()})
+        return self._reply(404, {'ok': False, 'error': 'Unknown shared POS endpoint.'})
+
+    def do_POST(self):
+        if not self._allowed():
+            return self._reply(401, {'ok': False, 'error': 'Invalid shared POS token.'})
+        try:
+            data = self._body()
+            if self.path == '/v1/state':
+                result = self.server.api.save_state(data.get('state', {}))
+            elif self.path == '/v1/authenticate':
+                result = self.server.api.authenticate(data.get('username'), data.get('password'))
+            elif self.path == '/v1/users':
+                result = self.server.api.save_user(data.get('user', {}), data.get('userId'))
+            elif self.path == '/v1/backup':
+                result = self.server.api.create_backup_now()
+            else:
+                return self._reply(404, {'ok': False, 'error': 'Unknown shared POS endpoint.'})
+            self._reply(200, result)
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._reply(400, {'ok': False, 'error': f'Invalid request: {exc}'})
+        except Exception as exc:
+            self._reply(500, {'ok': False, 'error': f'Shared POS server error: {exc}'})
+
+    def do_DELETE(self):
+        if not self._allowed():
+            return self._reply(401, {'ok': False, 'error': 'Invalid shared POS token.'})
+        if not self.path.startswith('/v1/users/'):
+            return self._reply(404, {'ok': False, 'error': 'Unknown shared POS endpoint.'})
+        try:
+            self._reply(200, self.server.api.delete_user(int(self.path.rsplit('/', 1)[1])))
+        except (ValueError, IndexError):
+            self._reply(400, {'ok': False, 'error': 'Invalid user id.'})
+
+
+class RemoteApi:
+    """pywebview bridge used by a second terminal; printing always stays local."""
+    def __init__(self, server_url, token, local_settings_path):
+        self.server_url = server_url.rstrip('/')
+        self.token = token
+        self.window = None
+        self.local_api = Api(local_settings_path)
+
+    def _request(self, path, method='GET', payload=None):
+        data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        request = urllib.request.Request(
+            f'{self.server_url}{path}', data=data, method=method,
+            headers={'X-POS-Token': self.token, 'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                return json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as exc:
+            try:
+                return json.loads(exc.read().decode('utf-8'))
+            except Exception:
+                return {'ok': False, 'error': f'Shared POS server returned HTTP {exc.code}.'}
+        except (urllib.error.URLError, TimeoutError) as exc:
+            return {'ok': False, 'error': f'Cannot reach shared POS server: {exc}'}
+
+    def get_boot_data(self): return self._request('/v1/boot')
+    def get_printer_config(self): return self.local_api.get_printer_config()
+    def save_printer_config(self, config): return self.local_api.save_printer_config(config)
+    def authenticate(self, username, password): return self._request('/v1/authenticate', 'POST', {'username': username, 'password': password})
+    def save_state(self, state): return self._request('/v1/state', 'POST', {'state': state})
+    def save_user(self, user, user_id=None): return self._request('/v1/users', 'POST', {'user': user, 'userId': user_id})
+    def delete_user(self, user_id): return self._request(f'/v1/users/{user_id}', 'DELETE')
+    def get_backup_directory(self): return self._request('/v1/backup-directory').get('directory', '')
+    def create_backup_now(self): return self._request('/v1/backup', 'POST')
+
+    # Backups are centrally owned; OS printers remain per terminal.
+    def select_backup_folder(self): return {'ok': False, 'error': 'Select backup folders on the main counter PC.'}
+    def restore_from_directory(self): return {'ok': False, 'error': 'Restore backups on the main counter PC.'}
+    def get_system_printers(self): return Api.get_system_printers(self)
+    def test_printer(self, printer_name, receipt_type='Test'): return Api.test_printer(self, printer_name, receipt_type)
+    def print_direct(self, printer_name, receipt_data): return Api.print_direct(self, printer_name, receipt_data)
+
+
 def main():
+    parser = argparse.ArgumentParser(description='Mughal-E-Azam POS')
+    parser.add_argument('--share-lan', action='store_true', help='Share this counter database with another POS terminal.')
+    parser.add_argument('--server-host', default='0.0.0.0', help='LAN address to bind when --share-lan is enabled.')
+    parser.add_argument('--server-port', type=int, default=8765, help='LAN port for shared POS access.')
+    parser.add_argument('--server-token', default=os.environ.get('MUGHAL_POS_TOKEN', ''), help='Shared POS token; required for LAN mode.')
+    parser.add_argument('--server-url', default=os.environ.get('MUGHAL_POS_SERVER', ''), help='Use the specified main-counter shared POS server.')
+    args = parser.parse_args()
+    if args.server_url and not args.server_token:
+        parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --server-url.')
+    if args.share_lan and not args.server_token:
+        parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
+
     base_dir, port = get_base_dir(), get_free_port()
     threading.Thread(target=start_server, args=(port, base_dir), daemon=True).start()
-    api = Api(os.path.join(get_data_dir(), 'database.sqlite'))
+    api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
+    if args.share_lan:
+        threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
     api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
     webview.start()
 
