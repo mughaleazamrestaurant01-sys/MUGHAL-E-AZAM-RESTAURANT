@@ -1,5 +1,36 @@
 # POS hardening and completion plan
 
+## 2026-09-18 receipt legibility and startup reliability — completed
+
+- The on-site print photograph shows that the first template pass is reaching the
+  printer, but it leaves blank header lines and still uses a dense, hard-to-read
+  raw-text presentation. This pass will use a single high-contrast, centered
+  fixed-width layout without empty address/phone rows and will preserve every
+  receipt field.
+- Desktop startup now uses a local threaded loopback asset endpoint on an
+  operating-system-assigned port, verifies its serving thread before creating the
+  WebView, and shuts it down with the application. This avoids intermittent
+  `file://` WebView-origin startup failures and removes fixed-port conflicts.
+- Native receipt composition now omits empty optional header rows and wraps long
+  titles, addresses, and footers rather than truncating them, so the restaurant
+  identity and receipt data remain centered, visible, and complete.
+- The local asset endpoint and native receipt wrapping behaviour were checked in
+  isolation; Python compilation, inline Vue syntax validation, and diff checks
+  also pass.
+
+## 2026-09-18 receipt-template implementation — completed
+
+- Applying the five approved layouts in `Receipts design.html` to the live POS
+  receipt pipeline: Kitchen KOT, unpaid preview bill, paid dine-in receipt,
+  takeaway receipt, and delivery receipt. This includes both the on-screen
+  printable document and the native thermal-printer text payload.
+- The on-screen printable area now uses the approved monospace dividers,
+  headings, order-type metadata, totals, and order-specific closing messages.
+- The native thermal payload now mirrors those templates, including the KOT item
+  grid, unpaid preview notice, paid/order-type totals, takeaway token, and
+  delivery customer/COD sections. Python compilation, Vue script syntax, and
+  mocked native print-payload checks for all five variants passed.
+
 ## Review status: single-computer POS completed; shared two-computer POS not yet built
 
 This document was reviewed against the active desktop entry point (`index.html`) and
