@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import secrets
 import shutil
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -12,7 +11,6 @@ import tempfile
 import threading
 import argparse
 import http.server
-import socketserver
 import time
 import urllib.error
 import urllib.request
@@ -32,43 +30,26 @@ def get_data_dir():
     return path
 
 
-def get_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
-        return s.getsockname()[1]
+def acquire_single_instance():
+    """Return a Windows mutex handle, or None when the POS is already open."""
+    if sys.platform != 'win32':
+        return True
 
+    import ctypes
 
-class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    # Cache immutable bundled assets between launches; index.html itself stays fresh.
-    def end_headers(self):
-        if self.path.startswith('/assets/'):
-            self.send_header('Cache-Control', 'public, max-age=604800, immutable')
-        else:
-            self.send_header('Cache-Control', 'no-cache')
-        super().end_headers()
-
-    def copyfile(self, source, outputfile):
-        try:
-            super().copyfile(source, outputfile)
-        except (BrokenPipeError, ConnectionResetError):
-            # The embedded browser can cancel a speculative asset request.
-            pass
-
-    def log_message(self, format, *args):
-        pass
-
-
-def create_local_server(directory):
-    """Bind before opening the webview so its first page request cannot race the server."""
-    class CustomHandler(QuietHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=directory, **kwargs)
-
-    class LocalServer(http.server.ThreadingHTTPServer):
-        allow_reuse_address = True
-        daemon_threads = True
-
-    return LocalServer(('127.0.0.1', 0), CustomHandler)
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, 'Local\\MughalEAzamPOSDesktop')
+    if not mutex:
+        raise OSError('Unable to create the POS single-instance lock.')
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            'Mughal-E-Azam POS is already open. Use the existing POS window instead of starting a second copy.',
+            'Mughal-E-Azam POS',
+            0x40,
+        )
+        ctypes.windll.kernel32.CloseHandle(mutex)
+        return None
+    return mutex
 
 
 class Api:
@@ -81,16 +62,21 @@ class Api:
         self._initialize_database()
 
     def _connection(self):
-        connection = sqlite3.connect(self.database_path, timeout=10)
+        # Do not leave the UI appearing frozen for ten seconds when a second
+        # process or interrupted old instance has a database lock.
+        connection = sqlite3.connect(self.database_path, timeout=3)
         connection.row_factory = sqlite3.Row
-        connection.execute('PRAGMA busy_timeout = 10000')
+        connection.execute('PRAGMA busy_timeout = 3000')
         connection.execute('PRAGMA temp_store = MEMORY')
         connection.execute('PRAGMA cache_size = -8000')
         return connection
 
     def _initialize_database(self):
         with self._connection() as db:
-            db.execute('PRAGMA journal_mode = WAL')
+            # Setting journal_mode writes to the database and can block startup.
+            # Query first and only migrate older databases that are not yet WAL.
+            if db.execute('PRAGMA journal_mode').fetchone()[0].lower() != 'wal':
+                db.execute('PRAGMA journal_mode = WAL')
             db.execute('PRAGMA synchronous = NORMAL')
             db.execute('''CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
@@ -289,11 +275,36 @@ class Api:
         except Exception as exc:
             return {'printers': [], 'error': f'Unable to read system printers: {exc}'}
 
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'):
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'):
         return self.print_direct(printer_name, {
             'title': f'TEST {receipt_type.upper()}', 'orderId': 'TEST-001',
             'items': [], 'isKot': receipt_type.upper() == 'KOT', 'cutMode': cut_mode
         })
+
+    @staticmethod
+    def _print_with_windows_driver(printer_name, text):
+        """Print through the Star Windows driver so its Document Bottom cut applies."""
+        import win32ui
+
+        printer_dc = win32ui.CreateDC()
+        printer_dc.CreatePrinterDC(printer_name)
+        font = win32ui.CreateFont({'name': 'Consolas', 'height': -24, 'weight': 400})
+        printer_dc.StartDoc('POS Receipt')
+        try:
+            printer_dc.StartPage()
+            printer_dc.SelectObject(font)
+            x, y = 24, 24
+            line_height = max(24, printer_dc.GetTextExtent('Ag')[1] + 4)
+            for receipt_line in text.rstrip('\n').split('\n'):
+                printer_dc.TextOut(x, y, receipt_line)
+                y += line_height
+            printer_dc.EndPage()
+            printer_dc.EndDoc()
+        except Exception:
+            printer_dc.AbortDoc()
+            raise
+        finally:
+            printer_dc.DeleteDC()
 
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
@@ -369,9 +380,29 @@ class Api:
             lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
-        # Star printers use ESC i, while most KOT/ESC-POS printers use GS V B 0.
-        cut_mode = receipt_data.get('cutMode', 'escpos')
-        cut_command = b'\x1b\x69' if cut_mode == 'star' else b'\x1dV\x42\x00'
+        # The Star Windows driver can perform a configured Document Bottom cut, but
+        # only for a driver-rendered job. RAW jobs bypass that driver feature.
+        # Keep raw command profiles for printers/emulations that require them.
+        cut_mode = receipt_data.get('cutMode', 'escpos_full')
+        cut_commands = {
+            'star': b'\x1b\x69',             # Legacy Star (ESC i) setting.
+            'star_full': None,                # Windows Star driver bottom cut.
+            'star_raw_full': b'\x1b\x69',    # Star line-mode raw full cut.
+            'star_partial': b'\x1b\x6d',     # Star line-mode partial cut.
+            'escpos': b'\x1dV\x42\x00',     # Legacy ESC/POS setting.
+            'escpos_full': b'\x1dV\x00',
+            'escpos_partial': b'\x1dV\x01',
+            'none': b'',
+        }
+        if cut_mode not in cut_commands:
+            return {'status': 'error', 'message': 'The selected printer cut profile is invalid.'}
+        if cut_mode == 'star_full' and sys.platform == 'win32':
+            try:
+                self._print_with_windows_driver(printer_name, text)
+                return {'status': 'success', 'message': f'Print job sent to {printer_name} using the Windows Star driver.'}
+            except Exception as exc:
+                return {'status': 'error', 'message': f'Windows driver print failed: {exc}'}
+        cut_command = (b'\n' * 5) + cut_commands[cut_mode]
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -548,7 +579,7 @@ class RemoteApi:
     def select_backup_folder(self): return {'ok': False, 'error': 'Select backup folders on the main counter PC.'}
     def restore_from_directory(self): return {'ok': False, 'error': 'Restore backups on the main counter PC.'}
     def get_system_printers(self): return Api.get_system_printers(self)
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
     def print_direct(self, printer_name, receipt_data): return Api.print_direct(self, printer_name, receipt_data)
 
 
@@ -565,16 +596,24 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
-    # Bind the local asset server synchronously before the embedded browser starts.
-    # This prevents a slow first launch from requesting index.html before a background
-    # server thread has finished binding its port.
-    local_server = create_local_server(get_base_dir())
-    threading.Thread(target=local_server.serve_forever, daemon=True).start()
+    instance_lock = acquire_single_instance()
+    if instance_lock is None:
+        return
+
+    # Everything needed by the interface is local and bundled. Loading index.html
+    # directly avoids starting a second HTTP service, selecting a port, and making
+    # a loopback browser request during each desktop launch.
+    local_html = os.path.join(get_base_dir(), 'index.html')
     api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
     if args.share_lan:
         threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{local_server.server_port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
-    webview.start()
+    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+    try:
+        webview.start()
+    finally:
+        if sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(instance_lock)
 
 
 if __name__ == '__main__':
