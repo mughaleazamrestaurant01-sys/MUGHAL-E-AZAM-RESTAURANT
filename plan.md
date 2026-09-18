@@ -13,8 +13,10 @@ have been replaced with the current implementation status.
    maintain.
 2. **Durable POS state.** SQLite persists menu items, inventory, recipes, orders,
    purchases, customers, tables, KDS tickets, carts, selected tables, printer
-   configuration, and the next order number. Reloading restores unfinished work and
-   active kitchen tickets.
+   configuration, the next order number, discounts, payment details, and unfinished
+   customer/delivery fields. A watched, debounced save covers values changed directly
+   in the screen, so they do not depend on a separate Save button. Reloading restores
+   unfinished work and active kitchen tickets.
 3. **Reliable order numbering.** The current order number is saved with the rest of
    the state, so normal application restarts do not return invoice numbering to
    `1001`.
@@ -33,10 +35,12 @@ have been replaced with the current implementation status.
 7. **Safe startup and feedback.** The UI waits for the pywebview bridge before it
    reads data or unlocks the POS. Startup failures keep the application locked and
    display an error. Toast messages give users success and error feedback.
-8. **Backups and restore.** Native folder backup creates a consistent SQLite copy,
-   including users. JSON export/import covers operational business state (but not
-   user accounts); the UI now states that distinction clearly. Restore validates a
-   SQLite backup before replacing the live database.
+8. **Backups and restore.** Selecting a custom folder immediately creates a
+   consistent SQLite backup there and stores that folder for future automatic
+   backups. The Backup page also has an explicit **Create Backup Now** button and
+   shows the saved file path or any backup error. Native backups include users; JSON
+   export/import covers operational business state (but not user accounts). Restore
+   validates a SQLite backup before replacing the live database.
 9. **Payment validation.** Cash orders cannot be completed until cash received is
    at least the payable total. This prevents recording an underpaid cash sale.
 
@@ -47,6 +51,9 @@ have been replaced with the current implementation status.
 - Isolated SQLite tests verified administrator creation, password authentication,
   prevention of the final-administrator demotion/deletion, and deletion once a
   second administrator exists.
+- State persistence and custom-folder backup were tested with a temporary SQLite
+  database, including reopening the resulting backup and checking saved cart and
+  discount data.
 - A whitespace check found no patch errors.
 
 ## Confirmed restaurant setup and requirements
@@ -134,3 +141,12 @@ These are not placeholder or dummy features, but are sensible future enhancement
 4. **Shared-POS dependency.** The two-computer feature must be built and tested
    before the laptop is used as a live second terminal. Until then, it remains a
    separate local POS installation and must not be treated as synchronized.
+
+## Maintainer attention for future chats
+
+Treat all single-computer functionality above as complete unless a reproducible bug
+is reported. The only planned product work requiring major development is the shared
+two-computer/server feature described in this document. Before starting that work,
+confirm the kitchen printer's fixed LAN IP address and agree on the server database
+and installation process. Do not claim that the two PCs are synchronized, and do not
+use a network-shared SQLite file as a shortcut.

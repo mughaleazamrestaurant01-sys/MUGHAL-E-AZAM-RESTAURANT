@@ -643,6 +643,7 @@
                             <input readonly :value="backupDirectory || 'No custom backup folder selected'" class="flex-1 neu-input p-2.5 rounded-xl text-xs text-white outline-none">
                             <button @click="chooseBackupDirectory" class="px-3 py-2 bg-blue-500 text-white font-bold rounded-xl text-xs">Select Custom Backup Folder</button>
                         </div>
+                        <button @click="createBackupNow" :disabled="!backupDirectory" class="w-full py-2.5 bg-emerald-500 text-white font-bold rounded-xl text-xs disabled:opacity-40">Create Backup Now</button>
                         <button @click="restoreFromDirectory" class="w-full py-2.5 bg-amber-500 text-white font-bold rounded-xl text-xs">Restore System from Directory</button>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
@@ -1841,6 +1842,9 @@
                     bootReady: false,
                     bootError: '',
                     toastTimer: null,
+                    persistenceTimer: null,
+                    persistenceChain: Promise.resolve(),
+                    persistenceReady: false,
                     loginForm: { username: '', password: '' },
                     loginError: '',
                     setupForm: { name: '', username: '', password: '' },
@@ -2116,6 +2120,22 @@
                         icon: cat.icon,
                         amount: totals[cat.id] || 0
                     }));
+                },
+
+                // One watched snapshot covers every operational value that must
+                // survive a close/restart, including fields changed directly by
+                // v-model such as customer details and discounts.
+                operationalState() {
+                    return this.buildPersistentState();
+                }
+            },
+
+            watch: {
+                operationalState: {
+                    deep: true,
+                    handler() {
+                        if (this.persistenceReady) this.queuePersistentSave();
+                    }
                 }
             },
 
@@ -2141,6 +2161,7 @@
                         return;
                     }
                     this.bootReady = true;
+                    this.persistenceReady = true;
                 },
 
                 updateClock() {
@@ -2165,6 +2186,27 @@
                     if (type === 'Dine-In' && !this.selectedTable) {
                         this.selectedTable = this.tables[0];
                     }
+                },
+
+                buildPersistentState() {
+                    return {
+                        orderHistory: this.orderHistory, purchaseHistory: this.purchaseHistory,
+                        customers: this.customers, inventory: this.inventory, menuItems: this.menuItems,
+                        categories: this.categories, expenses: this.expenses,
+                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig,
+                        tables: this.tables, kdsOrders: this.kdsOrders, currentOrderId: this.currentOrderId,
+                        cart: this.cart, orderType: this.orderType,
+                        selectedTableId: this.selectedTable ? this.selectedTable.id : null,
+                        activeCustomerName: this.activeCustomerName, activeCustomerPhone: this.activeCustomerPhone,
+                        activeCustomerAddress: this.activeCustomerAddress, deliveryFeeInput: this.deliveryFeeInput,
+                        discountPercent: this.discountPercent, paymentMethod: this.paymentMethod,
+                        cashTendered: this.cashTendered
+                    };
+                },
+
+                queuePersistentSave() {
+                    clearTimeout(this.persistenceTimer);
+                    this.persistenceTimer = setTimeout(() => this.saveLocalStorageBackup(), 400);
                 },
 
                 addToCart(item) {
@@ -2853,24 +2895,20 @@
                 async saveLocalStorageBackup() {
                     // Kept as the common activity hook, but writes the real SQLite state, never localStorage.
                     if (!window.pywebview?.api?.save_state) return;
-                    const state = {
-                        orderHistory: this.orderHistory, purchaseHistory: this.purchaseHistory,
-                        customers: this.customers, inventory: this.inventory, menuItems: this.menuItems,
-                        categories: this.categories, expenses: this.expenses,
-                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig,
-                        tables: this.tables, kdsOrders: this.kdsOrders, currentOrderId: this.currentOrderId,
-                        cart: this.cart, orderType: this.orderType,
-                        selectedTableId: this.selectedTable ? this.selectedTable.id : null,
-                        activeCustomerName: this.activeCustomerName, activeCustomerPhone: this.activeCustomerPhone,
-                        activeCustomerAddress: this.activeCustomerAddress, deliveryFeeInput: this.deliveryFeeInput
-                    };
-                    try {
-                        const result = await window.pywebview.api.save_state(state);
-                        if (!result.ok) this.showToast('Unable to save POS data.');
-                    } catch (error) {
-                        console.error('POS state save failed:', error);
-                        this.showToast('Unable to save POS data.');
-                    }
+                    clearTimeout(this.persistenceTimer);
+                    // Queue saves so an older browser request cannot overwrite a
+                    // newer change and the SQLite bridge receives one write at once.
+                    this.persistenceChain = this.persistenceChain.catch(() => {}).then(async () => {
+                        try {
+                            const result = await window.pywebview.api.save_state(this.buildPersistentState());
+                            if (!result.ok) this.showToast('Unable to save POS data.');
+                            else if (result.backupError) this.showToast(result.backupError);
+                        } catch (error) {
+                            console.error('POS state save failed:', error);
+                            this.showToast('Unable to save POS data.');
+                        }
+                    });
+                    return this.persistenceChain;
                 },
 
                 async loadPersistentData() {
@@ -2896,6 +2934,9 @@
                     if (saved.activeCustomerPhone) this.activeCustomerPhone = saved.activeCustomerPhone;
                     if (saved.activeCustomerAddress) this.activeCustomerAddress = saved.activeCustomerAddress;
                     if (saved.deliveryFeeInput !== undefined) this.deliveryFeeInput = saved.deliveryFeeInput;
+                    if (saved.discountPercent !== undefined) this.discountPercent = saved.discountPercent;
+                    if (saved.paymentMethod) this.paymentMethod = saved.paymentMethod;
+                    if (saved.cashTendered !== undefined) this.cashTendered = saved.cashTendered;
                     if (saved.selectedTableId !== undefined) this.selectedTable = this.tables.find(table => table.id === saved.selectedTableId) || null;
                     this.backupDirectory = await window.pywebview.api.get_backup_directory();
                 },
@@ -2904,8 +2945,19 @@
                     const result = await window.pywebview.api.select_backup_folder();
                     if (result.ok) {
                         this.backupDirectory = result.directory;
-                        this.showToast('Backup folder selected. A current database copy was created.');
+                        this.showToast(`Backup created: ${result.path}`);
+                    } else if (!result.cancelled) {
+                        this.showToast(result.error || 'Unable to create the backup.');
                     }
+                },
+
+                async createBackupNow() {
+                    if (!window.pywebview?.api?.create_backup_now) {
+                        this.showToast('Native backup service is unavailable.');
+                        return;
+                    }
+                    const result = await window.pywebview.api.create_backup_now();
+                    this.showToast(result.ok ? `Backup created: ${result.path}` : (result.error || 'Unable to create the backup.'));
                 },
 
                 async restoreFromDirectory() {
@@ -2984,6 +3036,9 @@
                             this.activeCustomerPhone = parsed.activeCustomerPhone || '';
                             this.activeCustomerAddress = parsed.activeCustomerAddress || '';
                             this.deliveryFeeInput = parsed.deliveryFeeInput ?? null;
+                            if (parsed.discountPercent !== undefined) this.discountPercent = parsed.discountPercent;
+                            if (parsed.paymentMethod) this.paymentMethod = parsed.paymentMethod;
+                            if (parsed.cashTendered !== undefined) this.cashTendered = parsed.cashTendered;
 
                             this.saveLocalStorageBackup();
                             this.showBackupModal = false;
