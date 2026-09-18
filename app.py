@@ -41,10 +41,11 @@ class LocalAssetServer:
     document origin without exposing the POS on the restaurant network.
     """
 
-    def __init__(self, directory):
+    def __init__(self, directory, api):
         handler = functools.partial(self._handler(), directory=directory)
         self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
         self.server.daemon_threads = True
+        self.server.api = api
         self.thread = threading.Thread(target=self.server.serve_forever, name='pos-assets', daemon=True)
 
     @staticmethod
@@ -52,6 +53,58 @@ class LocalAssetServer:
         class QuietAssetHandler(http.server.SimpleHTTPRequestHandler):
             def log_message(self, format, *args):
                 pass
+
+            def _reply(self, status, payload):
+                encoded = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
+            def _payload(self):
+                length = int(self.headers.get('Content-Length', 0))
+                return json.loads(self.rfile.read(length).decode('utf-8')) if length else {}
+
+            def _api_call(self, method, payload):
+                api = self.server.api
+                calls = {
+                    'boot': lambda: api.get_boot_data(),
+                    'printer-config': lambda: api.get_printer_config(),
+                    'backup-directory': lambda: {'directory': api.get_backup_directory()},
+                    'system-printers': lambda: api.get_system_printers(),
+                    'save-state': lambda: api.save_state(payload.get('state', {})),
+                    'save-printer-config': lambda: api.save_printer_config(payload.get('config', {})),
+                    'authenticate': lambda: api.authenticate(payload.get('username'), payload.get('password')),
+                    'save-user': lambda: api.save_user(payload.get('user', {}), payload.get('userId')),
+                    'delete-user': lambda: api.delete_user(payload.get('userId')),
+                    'print-direct': lambda: api.print_direct(payload.get('printerName'), payload.get('receiptData', {})),
+                    'test-printer': lambda: api.test_printer(payload.get('printerName'), payload.get('receiptType', 'Test'), payload.get('cutMode', 'escpos_full')),
+                    'create-backup': lambda: api.create_backup_now(),
+                }
+                if method not in calls:
+                    raise ValueError('Unknown local POS API request.')
+                return calls[method]()
+
+            def do_GET(self):
+                if self.path.startswith('/api/'):
+                    try:
+                        self._reply(200, self._api_call(self.path[5:], {}))
+                    except Exception as exc:
+                        self._reply(500, {'ok': False, 'error': f'Local POS service error: {exc}'})
+                    return
+                super().do_GET()
+
+            def do_POST(self):
+                if not self.path.startswith('/api/'):
+                    self.send_error(404)
+                    return
+                try:
+                    self._reply(200, self._api_call(self.path[5:], self._payload()))
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    self._reply(400, {'ok': False, 'error': f'Invalid local POS request: {exc}'})
+                except Exception as exc:
+                    self._reply(500, {'ok': False, 'error': f'Local POS service error: {exc}'})
 
         return QuietAssetHandler
 
@@ -652,11 +705,11 @@ def main():
 
     asset_server = None
     try:
+        api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
         # Start the UI endpoint before the window exists.  This replaces the
         # file-origin launch path and its fragile browser-side startup polling.
-        asset_server = LocalAssetServer(get_base_dir())
+        asset_server = LocalAssetServer(get_base_dir(), api)
         asset_server.start()
-        api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
         if args.share_lan:
             threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
         api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', asset_server.url, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))

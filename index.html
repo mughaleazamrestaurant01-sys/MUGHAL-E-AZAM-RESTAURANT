@@ -17,16 +17,41 @@
     <script src="assets/js/vue.global.js"></script>
 
     <script>
-        // pywebview emits this event only after the native API is available.
-        // Listening once is more reliable than repeatedly probing the bridge
-        // during application startup.
-        window.posBridgeReady = new Promise((resolve) => {
-            if (window.pywebview && window.pywebview.api) {
-                resolve(window.pywebview.api);
-                return;
-            }
-            window.addEventListener('pywebviewready', () => resolve(window.pywebview.api), { once: true });
-        });
+        // The POS starts through the bundled loopback service, not the optional
+        // WebView JavaScript bridge. This means the database is reachable even
+        // when a Windows WebView runtime delays or omits `pywebviewready`.
+        (() => {
+            const request = async (method, payload, verb = 'POST') => {
+                const response = await fetch(`/api/${method}`, {
+                    method: verb,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: verb === 'GET' ? undefined : JSON.stringify(payload || {})
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'The local POS service could not complete the request.');
+                return data;
+            };
+            window.posApi = {
+                get_boot_data: () => request('boot', null, 'GET'),
+                get_printer_config: () => request('printer-config', null, 'GET'),
+                get_backup_directory: async () => (await request('backup-directory', null, 'GET')).directory || '',
+                get_system_printers: () => request('system-printers', null, 'GET'),
+                save_state: (state) => request('save-state', { state }),
+                save_printer_config: (config) => request('save-printer-config', { config }),
+                authenticate: (username, password) => request('authenticate', { username, password }),
+                save_user: (user, userId) => request('save-user', { user, userId }),
+                delete_user: (userId) => request('delete-user', { userId }),
+                print_direct: (printerName, receiptData) => request('print-direct', { printerName, receiptData }),
+                test_printer: (printerName, receiptType, cutMode) => request('test-printer', { printerName, receiptType, cutMode }),
+                create_backup_now: () => request('create-backup'),
+                select_backup_folder: () => window.pywebview?.api?.select_backup_folder
+                    ? window.pywebview.api.select_backup_folder()
+                    : Promise.resolve({ ok: false, error: 'Folder selection is unavailable in this WebView runtime.' }),
+                restore_from_directory: () => window.pywebview?.api?.restore_from_directory
+                    ? window.pywebview.api.restore_from_directory()
+                    : Promise.resolve({ ok: false, error: 'Backup restore is unavailable in this WebView runtime.' })
+            };
+        })();
     </script>
 
     <script>
@@ -2324,14 +2349,9 @@
                     this.bootLoading = true;
                     this.bootError = '';
                     try {
-                        // The native bridge is supplied by the verified loopback
-                        // document and resolves exactly once on pywebviewready.
-                        // This replaces the previous 100 ms polling loop that could
-                        // leave Windows showing an unresponsive opening screen.
-                        await Promise.race([
-                            window.posBridgeReady,
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('The POS data service did not connect.')), 10000))
-                        ]);
+                        // Startup data comes from the loopback POS endpoint. It does
+                        // not depend on pywebviewready, which is missing on some
+                        // installed Windows WebView runtimes.
                         await Promise.race([
                             this.loadPersistentData(),
                             new Promise((_, reject) => setTimeout(() => reject(new Error('Saved POS data took too long to open.')), 15000))
@@ -2874,7 +2894,7 @@
                 async triggerThermalPrint(data, targetPrinter) {
                     this.printableReceipt = data;
                     const target = targetPrinter || this.printerConfig.counterPrinterName;
-                    if (window.pywebview && window.pywebview.api && window.pywebview.api.print_direct) {
+                    if (window.posApi && window.posApi.print_direct) {
                         try {
                             const payload = {
                                 ...data,
@@ -2886,7 +2906,7 @@
                                 receiptFooter: this.printerConfig.receiptFooter,
                                 cutMode: data.isKot ? 'escpos_full' : this.printerConfig.receiptCutMode
                             };
-                            const result = await window.pywebview.api.print_direct(target, payload);
+                            const result = await window.posApi.print_direct(target, payload);
                             if (result.status !== 'success') {
                                 this.showToast(result.message || 'Printer did not accept the job.');
                             }
@@ -2927,9 +2947,9 @@
                 },
 
                 async detectSystemPrinters() {
-                    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_system_printers) {
+                    if (window.posApi && window.posApi.get_system_printers) {
                         try {
-                            const result = await window.pywebview.api.get_system_printers();
+                            const result = await window.posApi.get_system_printers();
                             const printers = Array.isArray(result) ? result : (result.printers || []);
                             this.availablePrinters = printers;
                             this.printerScanError = Array.isArray(result) ? '' : (result.error || '');
@@ -2952,8 +2972,8 @@
                         this.showToast('Select a printer before running a test.');
                         return;
                     }
-                    if (window.pywebview && window.pywebview.api && window.pywebview.api.test_printer) {
-                        const result = await window.pywebview.api.test_printer(printerName, typeLabel, cutMode);
+                    if (window.posApi && window.posApi.test_printer) {
+                        const result = await window.posApi.test_printer(printerName, typeLabel, cutMode);
                         this.showToast(result.message);
                         return;
                     }
@@ -2962,7 +2982,7 @@
 
                 async savePrinterSettings() {
                     this.showPrinterSettingsModal = false;
-                    const result = await window.pywebview.api.save_printer_config(this.printerConfig);
+                    const result = await window.posApi.save_printer_config(this.printerConfig);
                     this.showToast(result.ok ? 'Printer Setup Saved' : (result.error || 'Unable to save printer setup.'));
                 },
 
@@ -3080,11 +3100,11 @@
                         this.showToast('Name, username, and a password for a new user are required.');
                         return;
                     }
-                    if (!window.pywebview?.api?.save_user) {
+                    if (!window.posApi?.save_user) {
                         this.showToast('Database service is unavailable.');
                         return;
                     }
-                    const result = await window.pywebview.api.save_user(this.newUserForm, existing ? existing.id : null);
+                    const result = await window.posApi.save_user(this.newUserForm, existing ? existing.id : null);
                     if (!result.ok) {
                         this.showToast(result.error || 'Unable to save user.');
                         return;
@@ -3097,7 +3117,7 @@
                 async deleteUser(idx) {
                     const user = this.users[idx];
                     if (!confirm(`Are you sure you want to delete user "${user.name}"?`)) return;
-                    const result = await window.pywebview.api.delete_user(user.id);
+                    const result = await window.posApi.delete_user(user.id);
                     if (result.ok) {
                         this.users = result.users;
                         if (this.currentUser && this.currentUser.id === user.id) this.logout();
@@ -3116,13 +3136,13 @@
 
                 async saveLocalStorageBackup() {
                     // Kept as the common activity hook, but writes the real SQLite state, never localStorage.
-                    if (!window.pywebview?.api?.save_state) return;
+                    if (!window.posApi?.save_state) return;
                     clearTimeout(this.persistenceTimer);
                     // Queue saves so an older browser request cannot overwrite a
                     // newer change and the SQLite bridge receives one write at once.
                     this.persistenceChain = this.persistenceChain.catch(() => {}).then(async () => {
                         try {
-                            const result = await window.pywebview.api.save_state(this.buildPersistentState());
+                            const result = await window.posApi.save_state(this.buildPersistentState());
                             if (!result.ok) this.showToast(result.error || 'Unable to save POS data.');
                             else if (result.backupError) this.showToast(result.backupError);
                         } catch (error) {
@@ -3134,8 +3154,8 @@
                 },
 
                 async loadPersistentData() {
-                    if (!window.pywebview?.api?.get_boot_data) return;
-                    const boot = await window.pywebview.api.get_boot_data();
+                    if (!window.posApi?.get_boot_data) return;
+                    const boot = await window.posApi.get_boot_data();
                     if (!boot || boot.ok === false) {
                         throw new Error((boot && boot.error) || 'The POS data service did not return startup data.');
                     }
@@ -3149,7 +3169,7 @@
                     if (saved.categories) this.categories = saved.categories;
                     if (saved.expenses) this.expenses = saved.expenses;
                     if (saved.dailyOpeningCash !== undefined) this.dailyOpeningCash = saved.dailyOpeningCash;
-                    const localPrinterConfig = await window.pywebview.api.get_printer_config();
+                    const localPrinterConfig = await window.posApi.get_printer_config();
                     if (localPrinterConfig && Object.keys(localPrinterConfig).length) this.printerConfig = { ...this.printerConfig, ...localPrinterConfig };
                     if (Array.isArray(saved.tables)) this.tables = saved.tables;
                     if (Array.isArray(saved.kdsOrders)) this.kdsOrders = saved.kdsOrders;
@@ -3164,11 +3184,11 @@
                     if (saved.paymentMethod) this.paymentMethod = saved.paymentMethod;
                     if (saved.cashTendered !== undefined) this.cashTendered = saved.cashTendered;
                     if (saved.selectedTableId !== undefined) this.selectedTable = this.tables.find(table => table.id === saved.selectedTableId) || null;
-                    this.backupDirectory = await window.pywebview.api.get_backup_directory();
+                    this.backupDirectory = await window.posApi.get_backup_directory();
                 },
 
                 async chooseBackupDirectory() {
-                    const result = await window.pywebview.api.select_backup_folder();
+                    const result = await window.posApi.select_backup_folder();
                     if (result.ok) {
                         this.backupDirectory = result.directory;
                         this.showToast(`Backup created: ${result.path}`);
@@ -3178,17 +3198,17 @@
                 },
 
                 async createBackupNow() {
-                    if (!window.pywebview?.api?.create_backup_now) {
+                    if (!window.posApi?.create_backup_now) {
                         this.showToast('Native backup service is unavailable.');
                         return;
                     }
-                    const result = await window.pywebview.api.create_backup_now();
+                    const result = await window.posApi.create_backup_now();
                     this.showToast(result.ok ? `Backup created: ${result.path}` : (result.error || 'Unable to create the backup.'));
                 },
 
                 async restoreFromDirectory() {
                     if (!confirm('Restore the database from a backup folder? Current data will be replaced.')) return;
-                    const result = await window.pywebview.api.restore_from_directory();
+                    const result = await window.posApi.restore_from_directory();
                     if (!result.ok) {
                         if (!result.cancelled) this.showToast(result.error || 'Restore failed.');
                         return;
@@ -3278,12 +3298,12 @@
                 },
 
                 async handleLogin() {
-                    if (!window.pywebview?.api?.authenticate) {
+                    if (!window.posApi?.authenticate) {
                         this.loginError = 'Authentication service is unavailable.';
                         return;
                     }
                     try {
-                        const result = await window.pywebview.api.authenticate(this.loginForm.username, this.loginForm.password);
+                        const result = await window.posApi.authenticate(this.loginForm.username, this.loginForm.password);
                         if (result.ok) {
                             this.currentUser = result.user;
                             this.currentTab = this.firstAllowedTab();
@@ -3301,7 +3321,7 @@
 
                 async submitInitialSetup() {
                     this.setupError = '';
-                    if (!window.pywebview?.api?.save_user || !window.pywebview?.api?.authenticate) {
+                    if (!window.posApi?.save_user || !window.posApi?.authenticate) {
                         this.setupError = 'Account service is unavailable.';
                         return;
                     }
@@ -3311,12 +3331,12 @@
                         permissions: ['pos', 'kds', 'menu_manage', 'inventory', 'tables', 'history', 'customers', 'admin_dash']
                     };
                     try {
-                        const saved = await window.pywebview.api.save_user(user);
+                        const saved = await window.posApi.save_user(user);
                         if (!saved.ok) {
                             this.setupError = saved.error || 'Unable to create the administrator account.';
                             return;
                         }
-                        const signedIn = await window.pywebview.api.authenticate(user.username, user.password);
+                        const signedIn = await window.posApi.authenticate(user.username, user.password);
                         if (!signedIn.ok) {
                             this.setupError = signedIn.error || 'Account was created, but sign-in failed.';
                             return;
