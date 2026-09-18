@@ -216,6 +216,52 @@ UI and in its action method.
 
 ## Single-main-computer release readiness — 2026-09-18
 
+### Reported release blockers — resolved
+
+- The Windows workflow now uses PyInstaller `--onefile` and uploads only
+  `Mughal-E-Azam-POS.exe`. The previous `--onedir` release required its `_internal`
+  runtime directory and therefore failed with a missing `python311.dll` after that
+  directory was deleted. The replacement release is a portable EXE; operators must
+  delete the old EXE and `_internal` folder, then download the new artifact.
+- Counter receipts and printer tests now feed five lines before the selected cutter
+  command. Hardware setup offers Star TSP700II/TSP743II full/partial cut plus
+  ESC/POS full/partial alternatives, allowing the command to match the active
+  printer emulation. Existing saved `star` and `escpos` profile values remain
+  compatible.
+
+### Counter cutter follow-up — on-site verification required
+
+- The previous receipt path used the Windows `RAW` datatype and appended selected
+  cut bytes after a five-line feed. If every direct RAW profile prints the receipt
+  but none cuts it, Windows has delivered the job and the remaining fault is at
+  the selected queue's command emulation, the printer's cutter configuration, or
+  the cutter hardware/paper path—not in receipt content. Verify the exact Star
+  model includes an auto-cutter, run the Star utility/self-test cutter check,
+  confirm the Windows queue uses the correct Star driver and USB port, then set
+  the same Star/ESC-POS emulation in both the printer and POS before retesting.
+
+### 2026-09-18 Star driver-cut integration — completed
+
+- The supplied Windows screenshots confirm that the installed **Star TSP700II
+  (TSP743II)** driver is configured for **Document Bottom: Partial Cut**, and that
+  another application cuts successfully through this same queue. The previous POS
+  path used a `RAW` Windows print job, which deliberately bypassed that driver feature.
+  Counter receipts using the default **Windows Star driver** profile now render
+  through the Windows/Star driver, allowing its confirmed Document Bottom setting
+  to issue the cut. Raw Star and ESC/POS profiles remain available for queues
+  configured for direct command control.
+
+### 2026-09-18 desktop startup redesign — completed
+
+- The desktop shell currently starts an unnecessary local HTTP asset server and
+  then opens the embedded browser against it. This adds a second startup service,
+  a socket bind, and a browser network request even though all assets are already
+  packaged locally. The application now launches the bundled `index.html` directly
+  in the WebView, without a local HTTP server, socket bind, or loopback request.
+  A Windows single-instance guard prevents duplicate launches from contending for
+  the same database, and the UI now reports a WebView bridge timeout after ten
+  seconds rather than remaining on an indefinite loading screen.
+
 The single-main-computer POS has been built and hardened through **2026-09-18** and
 is **good to go** after the operator installs the current EXE and verifies the Star
 receipt and XSP-210 KOT test prints. The confirmed main-PC configuration is: Star
