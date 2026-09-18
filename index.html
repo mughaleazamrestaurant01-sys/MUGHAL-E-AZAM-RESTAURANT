@@ -2188,7 +2188,8 @@
                     // network queue. Do not keep the POS loading screen open for it.
                     this.bootReady = true;
                     this.persistenceReady = true;
-                    this.detectSystemPrinters().catch(error => console.error('Printer detection failed:', error));
+                    // Windows can probe unavailable network printers for several seconds.
+                    // Scan only when the administrator opens the printer settings screen.
                 },
 
                 updateClock() {

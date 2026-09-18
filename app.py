@@ -39,16 +39,36 @@ def get_free_port():
 
 
 class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    # Cache immutable bundled assets between launches; index.html itself stays fresh.
+    def end_headers(self):
+        if self.path.startswith('/assets/'):
+            self.send_header('Cache-Control', 'public, max-age=604800, immutable')
+        else:
+            self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
+    def copyfile(self, source, outputfile):
+        try:
+            super().copyfile(source, outputfile)
+        except (BrokenPipeError, ConnectionResetError):
+            # The embedded browser can cancel a speculative asset request.
+            pass
+
     def log_message(self, format, *args):
         pass
 
 
-def start_server(port, directory):
+def create_local_server(directory):
+    """Bind before opening the webview so its first page request cannot race the server."""
     class CustomHandler(QuietHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=directory, **kwargs)
-    with socketserver.TCPServer(('127.0.0.1', port), CustomHandler) as httpd:
-        httpd.serve_forever()
+
+    class LocalServer(http.server.ThreadingHTTPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
+    return LocalServer(('127.0.0.1', 0), CustomHandler)
 
 
 class Api:
@@ -64,6 +84,8 @@ class Api:
         connection = sqlite3.connect(self.database_path, timeout=10)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA busy_timeout = 10000')
+        connection.execute('PRAGMA temp_store = MEMORY')
+        connection.execute('PRAGMA cache_size = -8000')
         return connection
 
     def _initialize_database(self):
@@ -540,12 +562,15 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
-    base_dir, port = get_base_dir(), get_free_port()
-    threading.Thread(target=start_server, args=(port, base_dir), daemon=True).start()
+    # Bind the local asset server synchronously before the embedded browser starts.
+    # This prevents a slow first launch from requesting index.html before a background
+    # server thread has finished binding its port.
+    local_server = create_local_server(get_base_dir())
+    threading.Thread(target=local_server.serve_forever, daemon=True).start()
     api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
     if args.share_lan:
         threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{local_server.server_port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
     webview.start()
 
 
