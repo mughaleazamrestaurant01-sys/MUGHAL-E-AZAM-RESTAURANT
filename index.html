@@ -17,6 +17,19 @@
     <script src="assets/js/vue.global.js"></script>
 
     <script>
+        // pywebview emits this event only after the native API is available.
+        // Listening once is more reliable than repeatedly probing the bridge
+        // during application startup.
+        window.posBridgeReady = new Promise((resolve) => {
+            if (window.pywebview && window.pywebview.api) {
+                resolve(window.pywebview.api);
+                return;
+            }
+            window.addEventListener('pywebviewready', () => resolve(window.pywebview.api), { once: true });
+        });
+    </script>
+
+    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -114,6 +127,28 @@
             overflow-wrap: break-word;
         }
 
+        .receipt-brand {
+            text-align: center;
+        }
+
+        .receipt-restaurant-name {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        /* Address/contact lines are precisely 20% smaller than the H1 name. */
+        .receipt-address, .receipt-contact, .receipt-tagline {
+            font-size: 16px;
+            font-weight: 400;
+            line-height: 1.2;
+        }
+
+        .receipt-section-heading, .receipt-item-heading, .receipt-total {
+            font-weight: 700;
+        }
+
         .thermal-divider {
             margin: 4px 0;
             overflow: hidden;
@@ -161,6 +196,8 @@
                 box-shadow: none !important;
                 padding: 0 4mm !important;
             }
+            .receipt-restaurant-name { font-size: 20px !important; }
+            .receipt-address, .receipt-contact, .receipt-tagline { font-size: 16px !important; }
         }
     </style>
 </head>
@@ -168,13 +205,13 @@
 
     <div id="app" class="h-full flex flex-col bg-[#16171b]">
 
-        <!-- Never show unrestricted POS content until the desktop database bridge has answered. -->
+        <!-- The screen remains protected until the native data service is ready. -->
         <div v-if="!bootReady" class="fixed inset-0 bg-[#141519] z-[60] flex items-center justify-center p-4">
             <div class="neu-flat rounded-3xl p-8 text-center border border-[#252730]">
                 <i class="fa-solid fa-database animate-pulse text-3xl text-neu-accent mb-3"></i>
-                <p class="text-sm font-bold text-white">{{ bootError || 'Opening saved POS data…' }}</p>
-                <p class="text-xs text-neu-muted mt-2">{{ bootError ? 'Restart the software. Your POS screen remains locked to protect your data.' : 'Please wait. Do not close the software.' }}</p>
-                <button v-if="bootError" @click="startBoot" class="mt-4 px-4 py-2 bg-neu-accent text-white text-xs font-bold rounded-xl">Retry connection</button>
+                <p class="text-sm font-bold text-white">{{ bootError || 'Preparing secure POS…' }}</p>
+                <p class="text-xs text-neu-muted mt-2">{{ bootError ? 'The data service is unavailable. Check the connection and try again.' : 'Please wait while the POS connects.' }}</p>
+                <button v-if="bootError" @click="startBoot" class="mt-4 px-4 py-2 bg-neu-accent text-white text-xs font-bold rounded-xl">Try again</button>
             </div>
         </div>
 
@@ -1475,12 +1512,13 @@
                 </template>
 
                 <template v-else>
-                    <div class="text-center space-y-0.5">
-                        <div class="font-bold uppercase text-[15px]">{{ printerConfig.restaurantName || printerConfig.receiptHeader || 'MUGHAL-E-AZAM RESTAURANT' }}</div>
-                        <div v-if="printerConfig.restaurantAddress" class="text-[10px]">{{ printerConfig.restaurantAddress }}</div>
-                        <div v-if="printerConfig.restaurantPhone" class="text-[10px]">TEL: {{ printerConfig.restaurantPhone }}</div>
+                    <div class="receipt-brand space-y-0.5">
+                        <h1 class="receipt-restaurant-name uppercase">{{ printerConfig.restaurantName || printerConfig.receiptHeader || 'MUGHAL-E-AZAM RESTAURANT' }}</h1>
+                        <div v-if="printerConfig.restaurantTagline" class="receipt-tagline">{{ printerConfig.restaurantTagline }}</div>
+                        <div v-if="printerConfig.restaurantAddress" class="receipt-address">{{ printerConfig.restaurantAddress }}</div>
+                        <div v-if="printerConfig.restaurantPhone" class="receipt-contact">TEL: {{ printerConfig.restaurantPhone }}</div>
                         <div class="thermal-divider">================================</div>
-                        <div class="font-bold uppercase" :class="printableReceipt.isPreview ? 'text-[11px]' : 'text-[14px]'">{{ printableReceipt.title }}</div>
+                        <div class="receipt-section-heading uppercase" :class="printableReceipt.isPreview ? 'text-[11px]' : 'text-[14px]'">{{ printableReceipt.title }}</div>
                         <div class="thermal-divider">================================</div>
                         <div v-if="printableReceipt.orderType === 'Takeaway'" class="font-bold text-lg">TOKEN: #{{ printableReceipt.orderId }}</div>
                     </div>
@@ -1498,13 +1536,13 @@
                         <div class="text-[11px] space-y-0.5"><div class="font-bold">CUSTOMER DETAILS:</div><div v-if="printableReceipt.customerName">NAME : {{ printableReceipt.customerName }}</div><div v-if="printableReceipt.customerPhone">TEL  : {{ printableReceipt.customerPhone }}</div><div v-if="printableReceipt.customerAddress">ADDR : {{ printableReceipt.customerAddress }}</div></div>
                     </template>
                     <div class="thermal-divider">--------------------------------</div>
-                    <div class="thermal-row font-bold text-[10px]"><span>QTY DESCRIPTION</span><span>PRICE (RS.)</span></div>
+                    <div class="thermal-row receipt-item-heading text-[10px]"><span>QTY DESCRIPTION</span><span>PRICE (RS.)</span></div>
                     <div class="thermal-divider">--------------------------------</div>
                     <div class="space-y-1 my-2 text-[11px]"><div v-for="(item, idx) in printableReceipt.items" :key="idx" class="thermal-row"><span>{{ item.qty }} x {{ item.name }}</span><span>{{ receiptMoney(item.price * item.qty) }}</span></div></div>
                     <div class="thermal-divider">--------------------------------</div>
                     <div class="text-[11px] space-y-0.5"><div class="thermal-row"><span>SUB TOTAL</span><span>{{ receiptMoney(printableReceipt.subtotal) }}</span></div><div v-if="printableReceipt.discount > 0" class="thermal-row"><span>DISCOUNT</span><span>-{{ receiptMoney(printableReceipt.discount) }}</span></div><div v-if="printableReceipt.deliveryFee > 0" class="thermal-row"><span>DELIVERY FEE</span><span>{{ receiptMoney(printableReceipt.deliveryFee) }}</span></div></div>
                     <div class="thermal-divider">================================</div>
-                    <div class="thermal-row font-bold text-base"><span>{{ printableReceipt.isPreview ? 'EST. TOTAL' : (printableReceipt.orderType === 'Delivery' && isCashPayment(printableReceipt.paymentMethod) ? 'COLLECT CASH' : 'TOTAL PAID') }}</span><span>Rs. {{ receiptMoney(printableReceipt.grandTotal) }}</span></div>
+                    <div class="thermal-row receipt-total text-base"><span>{{ printableReceipt.isPreview ? 'EST. TOTAL' : (printableReceipt.orderType === 'Delivery' && isCashPayment(printableReceipt.paymentMethod) ? 'COLLECT CASH' : 'TOTAL PAID') }}</span><span>Rs. {{ receiptMoney(printableReceipt.grandTotal) }}</span></div>
                     <div class="thermal-divider">================================</div>
                     <div class="text-center font-bold text-[10px] mt-3 whitespace-pre-line">{{ receiptClosingMessage }}</div>
                 </template>
@@ -2286,18 +2324,17 @@
                     this.bootLoading = true;
                     this.bootError = '';
                     try {
-                        // The ready event can fire before Vue's mounted hook. Poll the
-                        // bridge instead so startup works regardless of event timing.
-                        const deadline = Date.now() + 15000;
-                        while (!window.pywebview?.api?.get_boot_data) {
-                            if (Date.now() >= deadline) {
-                                throw new Error('The POS bridge did not connect. Click Retry connection, then restart only if it still fails.');
-                            }
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                        }
+                        // The native bridge is supplied by the verified loopback
+                        // document and resolves exactly once on pywebviewready.
+                        // This replaces the previous 100 ms polling loop that could
+                        // leave Windows showing an unresponsive opening screen.
+                        await Promise.race([
+                            window.posBridgeReady,
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('The POS data service did not connect.')), 10000))
+                        ]);
                         await Promise.race([
                             this.loadPersistentData(),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('Saved POS data took too long to open. Click Retry connection.')), 15000))
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('Saved POS data took too long to open.')), 15000))
                         ]);
                     } catch (error) {
                         console.error('POS startup failed:', error);
