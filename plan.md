@@ -69,7 +69,7 @@ Ethernet LAN. Mobile ordering is deliberately out of scope for now.
 | --- | --- | --- | --- |
 | Main counter PC | Windows 10 | Runs all day; central server, dine-in/counter POS, administration, reports | Star TSP700II / TSP743II (USB) |
 | Evening laptop | Windows 11 | Takeaway and delivery POS from 6 PM to 11 PM | SRP-352 Plus (USB) |
-| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; confirmed IP `192.168.10.220`) |
+| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; exact IP still required) |
 
 Both computers and the kitchen printer are already connected to the same router by
 Ethernet. The administrator will create the laptop user's account and choose its
@@ -123,8 +123,8 @@ drive: SQLite over a network share is not a safe solution for simultaneous POS u
    database.
 5. **Kitchen printer installation:** reserve a fixed DHCP address for the XSP-210 in
    the router, install its Windows network/TCP-IP queue on both PCs, then select
-   that queue as the kitchen printer on each PC. Its confirmed address is
-   `192.168.10.220`; reserve that address in the router so it does not change.
+   that queue as the kitchen printer on each PC. Its exact IP address and driver
+   still need to be confirmed on site.
 6. **End-to-end acceptance test:** use both PCs at the same time to test busy-table
    blocking, laptop delivery orders, KOT-only printing from each PC, each local
    receipt printer, stock deduction, simultaneous saves, restart/reconnect, backup,
@@ -151,16 +151,8 @@ These are not placeholder or dummy features, but are sensible future enhancement
 Treat all single-computer functionality above as complete unless a reproducible bug
 is reported. The only planned product work requiring major development is the shared
 two-computer/server feature described in this document. Before starting that work,
-reserve the confirmed kitchen-printer IP address (`192.168.10.220`) and agree on the
-server database and installation process. Do not claim that the two PCs are
-synchronized, and do not use a network-shared SQLite file as a shortcut. When adding
-a new screen or action, assign it to an existing permission and enforce that
-permission both in the visible UI and in its action method.
-
-## Printer build requirement
-
-The Windows printer error **`No module named 'win32print'`** was caused by the
-packaged EXE not including the Windows `pywin32` printer module. The Windows build
-workflow now installs `pywin32` and explicitly includes `win32print` and `pywintypes`
-in the EXE. A newly built EXE is required on both POS computers; the already-installed
-EXE will continue to show that error until it is replaced.
+confirm the kitchen printer's fixed LAN IP address and agree on the server database
+and installation process. Do not claim that the two PCs are synchronized, and do not
+use a network-shared SQLite file as a shortcut. When adding a new screen or action,
+assign it to an existing permission and enforce that permission both in the visible
+UI and in its action method.
