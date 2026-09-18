@@ -2537,6 +2537,10 @@
                 },
 
                 completeOrder() {
+                    if (this.paymentMethod === 'Cash' && Number(this.cashTendered || 0) < this.grandTotal) {
+                        this.showToast('Cash received must cover the total payable amount.');
+                        return;
+                    }
                     if (!this.deductRecipeInventory()) return;
                     this.showCheckoutModal = false;
 

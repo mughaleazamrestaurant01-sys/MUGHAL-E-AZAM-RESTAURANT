@@ -141,6 +141,15 @@ class Api:
                         (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', []))))
                     user_id = cursor.lastrowid
                 else:
+                    existing = db.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+                    if not existing:
+                        return {'ok': False, 'error': 'The requested user account was not found.'}
+                    # Do not allow the only administrator to be demoted. Without this
+                    # guard, a valid account set could become impossible to administer.
+                    if existing['role'] == 'Admin' and user.get('role', 'Cashier') != 'Admin':
+                        admin_count = db.execute("SELECT COUNT(*) FROM users WHERE role = 'Admin'").fetchone()[0]
+                        if admin_count <= 1:
+                            return {'ok': False, 'error': 'The last administrator account cannot be changed to a non-admin role.'}
                     if user.get('password'):
                         db.execute('UPDATE users SET username=?, password=?, role=?, name=?, permissions=? WHERE id=?',
                             (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', [])), user_id))
@@ -157,6 +166,13 @@ class Api:
             count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
             if count <= 1:
                 return {'ok': False, 'error': 'The last user account cannot be deleted.'}
+            user = db.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+            if not user:
+                return {'ok': False, 'error': 'The requested user account was not found.'}
+            if user['role'] == 'Admin':
+                admin_count = db.execute("SELECT COUNT(*) FROM users WHERE role = 'Admin'").fetchone()[0]
+                if admin_count <= 1:
+                    return {'ok': False, 'error': 'The last administrator account cannot be deleted.'}
             if db.execute('DELETE FROM users WHERE id = ?', (user_id,)).rowcount != 1:
                 return {'ok': False, 'error': 'The requested user account was not found.'}
         self._backup_after_write()
