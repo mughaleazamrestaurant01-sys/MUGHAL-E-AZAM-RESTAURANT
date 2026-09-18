@@ -325,59 +325,76 @@ class Api:
             return left[:width - len(right) - 1] + ' ' * max(1, width - len(left[:width - len(right) - 1]) - len(right)) + right
 
         if is_kot:
-            lines = [center('KITCHEN ORDER TICKET'), '-' * width,
-                     f"Order: {receipt_data.get('orderId', '')}"]
-            if receipt_data.get('time'):
-                lines.append(f"Time: {receipt_data['time']}")
-            if receipt_data.get('orderType'):
-                lines.append(f"Type: {receipt_data['orderType']}")
+            lines = [center('*** KITCHEN TICKET ***'), '=' * width]
             if receipt_data.get('tableName'):
-                lines.append(f"Table: {receipt_data['tableName']}")
-            if receipt_data.get('customerName'):
-                lines.append(f"Customer: {receipt_data['customerName']}")
-            lines.append('-' * width)
+                lines.extend([center(f"TABLE: {receipt_data['tableName']}"), '-' * width])
+            lines.append(f"KOT NO : {receipt_data.get('orderId', '')}")
+            if receipt_data.get('time'):
+                lines.append(f"TIME   : {receipt_data['time']}")
+            if receipt_data.get('orderType'):
+                lines.append(f"TYPE   : {receipt_data['orderType']}")
+            lines.extend(['=' * width, line('ITEM DESCRIPTION', 'QTY'), '=' * width])
             for item in receipt_data.get('items', []):
-                lines.append(f"{item.get('qty', 0)}x {item.get('name', '')}"[:width])
-            lines.append('-' * width)
+                lines.append(line(str(item.get('name', '')).upper(), f"{item.get('qty', 0)}x"))
+            lines.extend(['=' * width, center('[ END OF ORDER - COOK PROMPTLY ]')])
         else:
+            order_type = receipt_data.get('orderType', '')
+            is_preview = receipt_data.get('isPreview', False)
+            is_delivery = order_type == 'Delivery'
+            is_takeaway = order_type == 'Takeaway'
+            payment_method = receipt_data.get('paymentMethod', '')
             lines = [
                 center(receipt_data.get('restaurantName') or receipt_data.get('header') or 'MUGHAL-E-AZAM RESTAURANT'),
-                center(receipt_data.get('restaurantTagline')),
                 center(receipt_data.get('restaurantAddress')),
                 center(receipt_data.get('restaurantPhone')),
-                '-' * width,
+                '=' * width,
                 center(receipt_data.get('title', 'RECEIPT')),
-                '-' * width,
-                line('Order #', receipt_data.get('orderId', '')),
+                '=' * width,
             ]
+            if is_takeaway:
+                lines.extend([center(f"TOKEN: #{receipt_data.get('orderId', '')}"), '-' * width])
+            lines.append(f"{'ORD NO' if is_delivery else 'INV NO'} : {receipt_data.get('orderId', '')}")
             if receipt_data.get('time'):
-                lines.append(line('Date / Time', receipt_data['time']))
-            if receipt_data.get('orderType'):
-                lines.append(line('Order Type', receipt_data['orderType']))
+                lines.append(f"DATE   : {receipt_data['time']}")
             if receipt_data.get('tableName'):
-                lines.append(line('Table', receipt_data['tableName']))
-            if receipt_data.get('customerName'):
-                lines.append(line('Customer', receipt_data['customerName']))
-            if receipt_data.get('customerPhone'):
-                lines.append(line('Phone', receipt_data['customerPhone']))
-            if receipt_data.get('customerAddress'):
-                lines.append('Address:')
-                lines.extend(str(receipt_data['customerAddress'])[i:i + width] for i in range(0, len(str(receipt_data['customerAddress'])), width))
-            lines.append('-' * width)
+                lines.append(f"TABLE  : {receipt_data['tableName']}")
+            if is_takeaway:
+                if receipt_data.get('customerName'):
+                    lines.append(f"CUST   : {receipt_data['customerName']}")
+                if receipt_data.get('customerPhone'):
+                    lines.append(f"PHONE  : {receipt_data['customerPhone']}")
+                lines.append(f"STATUS : {'PAID (' + str(payment_method) + ')' if payment_method else 'UNPAID'}")
+            if is_delivery:
+                lines.append(f"PAYMENT: {payment_method or 'CASH ON DELIVERY'}")
+                lines.extend(['-' * width, 'CUSTOMER DETAILS:'])
+                if receipt_data.get('customerName'):
+                    lines.append(f"NAME : {receipt_data['customerName']}")
+                if receipt_data.get('customerPhone'):
+                    lines.append(f"TEL  : {receipt_data['customerPhone']}")
+                if receipt_data.get('customerAddress'):
+                    lines.append('ADDR :')
+                    lines.extend(str(receipt_data['customerAddress'])[i:i + width] for i in range(0, len(str(receipt_data['customerAddress'])), width))
+            lines.extend(['-' * width, line('QTY DESCRIPTION', 'PRICE (RS.)'), '-' * width])
             for item in receipt_data.get('items', []):
                 qty, name, price = item.get('qty', 0), item.get('name', ''), item.get('price', 0)
-                lines.append(f"{qty}x {name}"[:width])
-                lines.append(line('', money(float(qty or 0) * float(price or 0))))
+                lines.append(line(f"{qty} x {name}", f"{float(qty or 0) * float(price or 0):.2f}"))
             lines.append('-' * width)
-            lines.append(line('Subtotal', money(receipt_data.get('subtotal'))))
+            lines.append(line('SUB TOTAL', f"{float(receipt_data.get('subtotal') or 0):.2f}"))
             if float(receipt_data.get('discount') or 0):
-                lines.append(line('Discount', '-' + money(receipt_data.get('discount'))))
+                lines.append(line('DISCOUNT', f"-{float(receipt_data.get('discount') or 0):.2f}"))
             if float(receipt_data.get('deliveryFee') or 0):
-                lines.append(line('Delivery Fee', money(receipt_data.get('deliveryFee'))))
-            lines.append(line('TOTAL', money(receipt_data.get('grandTotal'))))
-            if receipt_data.get('paymentMethod'):
-                lines.append(line('Payment', receipt_data['paymentMethod']))
-            lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
+                lines.append(line('DELIVERY FEE', f"{float(receipt_data.get('deliveryFee') or 0):.2f}"))
+            total_label = 'EST. TOTAL' if is_preview else ('COLLECT CASH' if is_delivery and 'cash' in str(payment_method).lower() else 'TOTAL PAID')
+            lines.extend(['=' * width, line(total_label, money(receipt_data.get('grandTotal'))), '=' * width])
+            if is_preview:
+                closing = '* NO PAYMENT RECEIVED *\nPLEASE PRESENT TO CASHIER'
+            elif is_takeaway:
+                closing = '[ READY FOR COUNTER PICKUP ]\nTHANK YOU FOR ORDERING!'
+            elif is_delivery and 'cash' in str(payment_method).lower():
+                closing = '* CASH ON DELIVERY (COD) *\nDRIVER: PLEASE COLLECT EXACT AMOUNT'
+            else:
+                closing = receipt_data.get('receiptFooter') or 'THANK YOU FOR YOUR VISIT!\nPLEASE COME AGAIN'
+            lines.extend(center(part) for part in closing.split('\n'))
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
         # The Star Windows driver can perform a configured Document Bottom cut, but
