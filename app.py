@@ -289,8 +289,11 @@ class Api:
         except Exception as exc:
             return {'printers': [], 'error': f'Unable to read system printers: {exc}'}
 
-    def test_printer(self, printer_name, receipt_type='Test'):
-        return self.print_direct(printer_name, {'title': f'TEST {receipt_type.upper()}', 'orderId': 'TEST-001', 'items': []})
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'):
+        return self.print_direct(printer_name, {
+            'title': f'TEST {receipt_type.upper()}', 'orderId': 'TEST-001',
+            'items': [], 'isKot': receipt_type.upper() == 'KOT', 'cutMode': cut_mode
+        })
 
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
@@ -545,7 +548,7 @@ class RemoteApi:
     def select_backup_folder(self): return {'ok': False, 'error': 'Select backup folders on the main counter PC.'}
     def restore_from_directory(self): return {'ok': False, 'error': 'Restore backups on the main counter PC.'}
     def get_system_printers(self): return Api.get_system_printers(self)
-    def test_printer(self, printer_name, receipt_type='Test'): return Api.test_printer(self, printer_name, receipt_type)
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
     def print_direct(self, printer_name, receipt_data): return Api.print_direct(self, printer_name, receipt_data)
 
 

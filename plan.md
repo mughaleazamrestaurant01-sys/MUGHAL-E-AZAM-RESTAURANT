@@ -241,3 +241,9 @@ be completed before simultaneous multi-terminal operation is approved.
 - The local asset server also ignores harmless cancelled speculative browser asset
   requests, preventing a cancelled first-load request from producing a server error
   trace while the POS continues opening.
+- Corrected the Windows distribution back to a single portable EXE after on-site
+  feedback: the one-folder package's `_internal` folder is required and must never
+  be deleted, so it was unsuitable for the requested simple installation. The live
+  Admin → Hardware printer page now exposes the professional receipt fields and
+  Star/ESC-POS cut-command selector directly (rather than only in an unused modal).
+  Printer test jobs now use the selected counter cutter command.

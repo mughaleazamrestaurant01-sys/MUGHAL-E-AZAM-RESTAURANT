@@ -550,7 +550,7 @@
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold text-emerald-400 block"><i class="fa-solid fa-receipt mr-1"></i>1. Counter & Customer Receipt Printer</span>
-                                    <button @click="testPrinterHardware(printerConfig.counterPrinterName, 'Counter Receipt')" class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
+                                    <button @click="testPrinterHardware(printerConfig.counterPrinterName, 'Counter Receipt', printerConfig.receiptCutMode)" class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
                                         <i class="fa-solid fa-vial mr-1"></i>
                                         <span>Test Receipt</span>
                                     </button>
@@ -565,7 +565,7 @@
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Ticket Printer (KOT Queue)</span>
-                                    <button @click="testPrinterHardware(printerConfig.kitchenPrinterName, 'Kitchen KOT')" class="px-2.5 py-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
+                                    <button @click="testPrinterHardware(printerConfig.kitchenPrinterName, 'Kitchen KOT', 'escpos')" class="px-2.5 py-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
                                         <i class="fa-solid fa-vial mr-1"></i>
                                         <span>Test KOT</span>
                                     </button>
@@ -580,12 +580,32 @@
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-3">
                                 <span class="font-bold text-purple-400 block"><i class="fa-solid fa-heading mr-1"></i>3. Receipt Branding Customization</span>
                                 <div>
-                                    <label class="text-neu-muted block mb-1">Receipt Header Text</label>
-                                    <input type="text" v-model="printerConfig.receiptHeader" placeholder="MUGHAL-E-AZAM RESTAURANT" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                    <label class="text-neu-muted block mb-1">Restaurant Name (large heading)</label>
+                                    <input type="text" v-model="printerConfig.restaurantName" placeholder="MUGHAL-E-AZAM RESTAURANT" class="w-full neu-input p-2 rounded-xl text-white outline-none">
                                 </div>
                                 <div>
-                                    <label class="text-neu-muted block mb-1">Receipt Footer Note</label>
-                                    <input type="text" v-model="printerConfig.receiptFooter" placeholder="Thank you for dining with us!" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                    <label class="text-neu-muted block mb-1">Tagline</label>
+                                    <input type="text" v-model="printerConfig.restaurantTagline" placeholder="Authentic Taste. Royal Hospitality." class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Restaurant Address</label>
+                                    <input type="text" v-model="printerConfig.restaurantAddress" placeholder="Your restaurant address" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Restaurant Phone</label>
+                                    <input type="text" v-model="printerConfig.restaurantPhone" placeholder="Your restaurant phone" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Professional Receipt Footer</label>
+                                    <textarea v-model="printerConfig.receiptFooter" rows="2" placeholder="Thank you for choosing Mughal-E-Azam." class="w-full neu-input p-2 rounded-xl text-white outline-none"></textarea>
+                                </div>
+                                <div>
+                                    <label class="text-neu-muted block mb-1">Counter Printer Cut Command</label>
+                                    <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                                        <option value="star">Star printer (ESC i cut)</option>
+                                        <option value="escpos">Standard thermal / ESC-POS (GS V cut)</option>
+                                    </select>
+                                    <p class="text-[10px] text-neu-muted mt-1">Use the Test Receipt button after saving. Start with Star for the TSP700II/TSP743II.</p>
                                 </div>
                             </div>
 
@@ -2781,13 +2801,13 @@
                     }
                 },
 
-                async testPrinterHardware(printerName, typeLabel) {
+                async testPrinterHardware(printerName, typeLabel, cutMode = 'escpos') {
                     if (!printerName) {
                         this.showToast('Select a printer before running a test.');
                         return;
                     }
                     if (window.pywebview && window.pywebview.api && window.pywebview.api.test_printer) {
-                        const result = await window.pywebview.api.test_printer(printerName, typeLabel);
+                        const result = await window.pywebview.api.test_printer(printerName, typeLabel, cutMode);
                         this.showToast(result.message);
                         return;
                     }
