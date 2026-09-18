@@ -30,53 +30,6 @@ def get_data_dir():
     return path
 
 
-def acquire_single_instance():
-    """Return a Windows mutex handle, or None when the POS is already open."""
-    if sys.platform != 'win32':
-        return True
-
-    import ctypes
-
-    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, 'Local\\MughalEAzamPOSDesktop')
-    if not mutex:
-        raise OSError('Unable to create the POS single-instance lock.')
-    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-        ctypes.windll.user32.MessageBoxW(
-            None,
-            'Mughal-E-Azam POS is already open. Use the existing POS window instead of starting a second copy.',
-            'Mughal-E-Azam POS',
-            0x40,
-        )
-        ctypes.windll.kernel32.CloseHandle(mutex)
-        return None
-    return mutex
-
-
-class LocalAssetHandler(http.server.SimpleHTTPRequestHandler):
-    """Quiet local-only asset handler for the embedded POS WebView."""
-
-    def log_message(self, format, *args):
-        return
-
-    def end_headers(self):
-        self.send_header('Cache-Control', 'public, max-age=86400')
-        super().end_headers()
-
-
-def start_local_asset_server():
-    """Serve bundled files from an ephemeral loopback port before opening WebView."""
-    handler = lambda *args, **kwargs: LocalAssetHandler(*args, directory=get_base_dir(), **kwargs)
-    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
-    server.daemon_threads = True
-    thread = threading.Thread(target=server.serve_forever, name='pos-local-assets', daemon=True)
-    thread.start()
-    if not thread.is_alive():
-        server.server_close()
-        raise RuntimeError('The local POS asset service did not start.')
-    host, port = server.server_address[:2]
-    return server, f'http://{host}:{port}/index.html'
-
-
 class Api:
     def __init__(self, database_path):
         self.database_path = database_path
@@ -647,27 +600,20 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
-    instance_lock = acquire_single_instance()
-    if instance_lock is None:
-        return
-
-    api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
-    asset_server = None
-    if args.share_lan:
-        threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
     try:
-        # A loopback HTTP origin is more reliable than file:// in Windows WebView
-        # runtimes and lets the browser load bundled scripts/fonts consistently.
-        asset_server, app_url = start_local_asset_server()
-        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', app_url, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+        # The installed Windows runtime is proven to load local bundled files;
+        # avoiding a second local server removes a failure point at launch.
+        local_html = os.path.join(get_base_dir(), 'index.html')
+        api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
+        if args.share_lan:
+            threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
+        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
         webview.start()
-    finally:
-        if asset_server:
-            asset_server.shutdown()
-            asset_server.server_close()
-        if sys.platform == 'win32':
-            import ctypes
-            ctypes.windll.kernel32.CloseHandle(instance_lock)
+    except Exception as exc:
+        # Do not leave an invisible process holding a launch mutex. The next
+        # launch is always allowed, and this failure is visible in a console log.
+        print(f'POS startup failed: {exc}', file=sys.stderr)
+        raise
 
 
 if __name__ == '__main__':

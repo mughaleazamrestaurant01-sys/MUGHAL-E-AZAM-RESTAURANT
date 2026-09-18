@@ -1,5 +1,20 @@
 # POS hardening and completion plan
 
+## 2026-09-18 emergency launch recovery — completed
+
+- The loopback/WebView change did not work on the installed Windows runtime: the
+  page remains at “Opening saved POS data” and the process-level mutex prevents a
+  recovery launch even when no usable window exists. Replace both mechanisms with
+  the known-compatible bundled `index.html` launch path, a bridge polling/retry
+  bootstrap, and no stale-process launch block.
+- The loopback server and launch-time mutex have now been removed from the startup
+  path. The Vue bootstrap polls for the native bridge (so it cannot miss an early
+  ready event), times out failed bridge/database calls, and presents a Retry
+  connection control instead of holding the user on an unrecoverable overlay.
+- Python compilation, inline Vue syntax, startup-path assertions, and whitespace
+  validation have passed. Rebuild and replace the Windows EXE before testing on
+  the counter PC; an existing installed EXE cannot contain this recovery change.
+
 ## 2026-09-18 receipt legibility and startup reliability — completed
 
 - The on-site print photograph shows that the first template pass is reaching the
