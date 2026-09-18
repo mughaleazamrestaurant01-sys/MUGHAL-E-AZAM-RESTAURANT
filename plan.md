@@ -229,6 +229,28 @@ UI and in its action method.
   printer emulation. Existing saved `star` and `escpos` profile values remain
   compatible.
 
+### Counter cutter follow-up — on-site verification required
+
+- The previous receipt path used the Windows `RAW` datatype and appended selected
+  cut bytes after a five-line feed. If every direct RAW profile prints the receipt
+  but none cuts it, Windows has delivered the job and the remaining fault is at
+  the selected queue's command emulation, the printer's cutter configuration, or
+  the cutter hardware/paper path—not in receipt content. Verify the exact Star
+  model includes an auto-cutter, run the Star utility/self-test cutter check,
+  confirm the Windows queue uses the correct Star driver and USB port, then set
+  the same Star/ESC-POS emulation in both the printer and POS before retesting.
+
+### 2026-09-18 Star driver-cut integration — completed
+
+- The supplied Windows screenshots confirm that the installed **Star TSP700II
+  (TSP743II)** driver is configured for **Document Bottom: Partial Cut**, and that
+  another application cuts successfully through this same queue. The POS currently
+  uses a `RAW` Windows print job, which deliberately bypasses that driver feature.
+  Counter receipts using the default **Windows Star driver** profile now render
+  through the Windows/Star driver, allowing its confirmed Document Bottom setting
+  to issue the cut. Raw Star and ESC/POS profiles remain available for queues
+  configured for direct command control.
+
 The single-main-computer POS has been built and hardened through **2026-09-18** and
 is **good to go** after the operator installs the current EXE and verifies the Star
 receipt and XSP-210 KOT test prints. The confirmed main-PC configuration is: Star

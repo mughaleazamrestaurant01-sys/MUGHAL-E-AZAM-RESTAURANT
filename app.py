@@ -295,6 +295,31 @@ class Api:
             'items': [], 'isKot': receipt_type.upper() == 'KOT', 'cutMode': cut_mode
         })
 
+    @staticmethod
+    def _print_with_windows_driver(printer_name, text):
+        """Print through the Star Windows driver so its Document Bottom cut applies."""
+        import win32ui
+
+        printer_dc = win32ui.CreateDC()
+        printer_dc.CreatePrinterDC(printer_name)
+        font = win32ui.CreateFont({'name': 'Consolas', 'height': -24, 'weight': 400})
+        printer_dc.StartDoc('POS Receipt')
+        try:
+            printer_dc.StartPage()
+            printer_dc.SelectObject(font)
+            x, y = 24, 24
+            line_height = max(24, printer_dc.GetTextExtent('Ag')[1] + 4)
+            for receipt_line in text.rstrip('\n').split('\n'):
+                printer_dc.TextOut(x, y, receipt_line)
+                y += line_height
+            printer_dc.EndPage()
+            printer_dc.EndDoc()
+        except Exception:
+            printer_dc.AbortDoc()
+            raise
+        finally:
+            printer_dc.DeleteDC()
+
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
             return {'status': 'error', 'message': 'Select a system printer first.'}
@@ -369,14 +394,14 @@ class Api:
             lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
-        # Feed before cutting: the cutter is above the print head, so a receipt
-        # that ends at the footer may otherwise never reach it. Keep the legacy
-        # values for saved installations, then support the explicit profiles
-        # exposed in Hardware setup.
+        # The Star Windows driver can perform a configured Document Bottom cut, but
+        # only for a driver-rendered job. RAW jobs bypass that driver feature.
+        # Keep raw command profiles for printers/emulations that require them.
         cut_mode = receipt_data.get('cutMode', 'escpos_full')
         cut_commands = {
             'star': b'\x1b\x69',             # Legacy Star (ESC i) setting.
-            'star_full': b'\x1b\x69',        # Star line-mode full cut.
+            'star_full': None,                # Windows Star driver bottom cut.
+            'star_raw_full': b'\x1b\x69',    # Star line-mode raw full cut.
             'star_partial': b'\x1b\x6d',     # Star line-mode partial cut.
             'escpos': b'\x1dV\x42\x00',     # Legacy ESC/POS setting.
             'escpos_full': b'\x1dV\x00',
@@ -385,6 +410,12 @@ class Api:
         }
         if cut_mode not in cut_commands:
             return {'status': 'error', 'message': 'The selected printer cut profile is invalid.'}
+        if cut_mode == 'star_full' and sys.platform == 'win32':
+            try:
+                self._print_with_windows_driver(printer_name, text)
+                return {'status': 'success', 'message': f'Print job sent to {printer_name} using the Windows Star driver.'}
+            except Exception as exc:
+                return {'status': 'error', 'message': f'Windows driver print failed: {exc}'}
         cut_command = (b'\n' * 5) + cut_commands[cut_mode]
         try:
             if sys.platform == 'win32':

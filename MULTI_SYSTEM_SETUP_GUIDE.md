@@ -121,6 +121,29 @@ local database.
 Save the settings and run printer tests from each POS. These settings are local to
 each terminal, so the laptop cannot replace the counter PC's receipt-printer choice.
 
+### Counter receipt cutter diagnosis
+
+For the installed **Star TSP700II (TSP743II)** queue, select **Windows Star driver**
+in POS Hardware setup. This sends a driver-rendered job, so the driver’s configured
+**Document Bottom: Partial Cut** setting can cut the receipt. The direct Star and
+ESC/POS options are RAW jobs that bypass this driver feature. If the driver mode
+does not cut, do this before changing the POS again:
+
+1. Confirm the exact counter printer model has an auto-cutter fitted; a tear-bar
+   model cannot be made to cut by software.
+2. Turn the printer off, clear any paper/cover/cutter error, reload paper correctly,
+   then turn it back on. Run the printer's own self-test or the Star utility's
+   cutter test. If that test does not cut, the problem is the printer/cutter and
+   requires driver/service support rather than a POS change.
+3. In Windows **Settings → Bluetooth & devices → Printers & scanners → [Star
+   printer] → Printer properties**, verify the queue uses the Star driver and the
+   correct active USB port. In **Device Settings**, keep **Document Bottom** set to
+   **Partial Cut** (as shown in the supplied working configuration).
+4. Save **Windows Star driver** in the POS, then use **Test Receipt**. Use RAW
+   profiles only when intentionally matching a printer's Star/line-mode or ESC/POS
+   command emulation; those modes do not use the Windows driver’s Document Bottom
+   setting.
+
 ## 11. Create users and permissions
 
 Create users from the counter/admin account. Suggested accounts:
