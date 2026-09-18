@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import argparse
+import functools
 import http.server
 import time
 import urllib.error
@@ -28,6 +29,108 @@ def get_data_dir():
     path = os.path.join(root or os.path.expanduser('~'), 'MughalEAzamPOS')
     os.makedirs(path, exist_ok=True)
     return path
+
+
+class LocalAssetServer:
+    """Serve the bundled interface from a private, verified loopback address.
+
+    Loading the POS from ``file://`` makes the WebView bridge dependent on the
+    browser engine's local-file security policy.  That policy differs between
+    installed Windows WebView runtimes and was the source of the startup screen
+    becoming stuck.  A loopback-only server gives every runtime the same normal
+    document origin without exposing the POS on the restaurant network.
+    """
+
+    def __init__(self, directory, api):
+        handler = functools.partial(self._handler(), directory=directory)
+        self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        self.server.daemon_threads = True
+        self.server.api = api
+        self.thread = threading.Thread(target=self.server.serve_forever, name='pos-assets', daemon=True)
+
+    @staticmethod
+    def _handler():
+        class QuietAssetHandler(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                pass
+
+            def _reply(self, status, payload):
+                encoded = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
+            def _payload(self):
+                length = int(self.headers.get('Content-Length', 0))
+                return json.loads(self.rfile.read(length).decode('utf-8')) if length else {}
+
+            def _api_call(self, method, payload):
+                api = self.server.api
+                calls = {
+                    'boot': lambda: api.get_boot_data(),
+                    'printer-config': lambda: api.get_printer_config(),
+                    'backup-directory': lambda: {'directory': api.get_backup_directory()},
+                    'system-printers': lambda: api.get_system_printers(),
+                    'save-state': lambda: api.save_state(payload.get('state', {})),
+                    'save-printer-config': lambda: api.save_printer_config(payload.get('config', {})),
+                    'authenticate': lambda: api.authenticate(payload.get('username'), payload.get('password')),
+                    'save-user': lambda: api.save_user(payload.get('user', {}), payload.get('userId')),
+                    'delete-user': lambda: api.delete_user(payload.get('userId')),
+                    'print-direct': lambda: api.print_direct(payload.get('printerName'), payload.get('receiptData', {})),
+                    'test-printer': lambda: api.test_printer(payload.get('printerName'), payload.get('receiptType', 'Test'), payload.get('cutMode', 'escpos_full')),
+                    'create-backup': lambda: api.create_backup_now(),
+                }
+                if method not in calls:
+                    raise ValueError('Unknown local POS API request.')
+                return calls[method]()
+
+            def do_GET(self):
+                if self.path.startswith('/api/'):
+                    try:
+                        self._reply(200, self._api_call(self.path[5:], {}))
+                    except Exception as exc:
+                        self._reply(500, {'ok': False, 'error': f'Local POS service error: {exc}'})
+                    return
+                super().do_GET()
+
+            def do_POST(self):
+                if not self.path.startswith('/api/'):
+                    self.send_error(404)
+                    return
+                try:
+                    self._reply(200, self._api_call(self.path[5:], self._payload()))
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    self._reply(400, {'ok': False, 'error': f'Invalid local POS request: {exc}'})
+                except Exception as exc:
+                    self._reply(500, {'ok': False, 'error': f'Local POS service error: {exc}'})
+
+        return QuietAssetHandler
+
+    @property
+    def url(self):
+        host, port = self.server.server_address[:2]
+        return f'http://{host}:{port}/index.html'
+
+    def start(self):
+        self.thread.start()
+        # The listening socket is created before the thread starts.  Verify the
+        # actual entry document now, so a packaging/path problem is reported
+        # before a WebView window is created.
+        try:
+            with urllib.request.urlopen(self.url, timeout=3) as response:
+                if response.status != 200:
+                    raise RuntimeError(f'asset server returned HTTP {response.status}')
+        except Exception:
+            self.close()
+            raise
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2)
 
 
 class Api:
@@ -600,20 +703,25 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
+    asset_server = None
     try:
-        # The installed Windows runtime is proven to load local bundled files;
-        # avoiding a second local server removes a failure point at launch.
-        local_html = os.path.join(get_base_dir(), 'index.html')
         api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
+        # Start the UI endpoint before the window exists.  This replaces the
+        # file-origin launch path and its fragile browser-side startup polling.
+        asset_server = LocalAssetServer(get_base_dir(), api)
+        asset_server.start()
         if args.share_lan:
             threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', asset_server.url, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
         webview.start()
     except Exception as exc:
         # Do not leave an invisible process holding a launch mutex. The next
         # launch is always allowed, and this failure is visible in a console log.
         print(f'POS startup failed: {exc}', file=sys.stderr)
         raise
+    finally:
+        if asset_server:
+            asset_server.close()
 
 
 if __name__ == '__main__':
