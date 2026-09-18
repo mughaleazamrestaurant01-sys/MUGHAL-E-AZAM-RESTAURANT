@@ -216,6 +216,19 @@ UI and in its action method.
 
 ## Single-main-computer release readiness — 2026-09-18
 
+### Reported release blockers — resolved
+
+- The Windows workflow now uses PyInstaller `--onefile` and uploads only
+  `Mughal-E-Azam-POS.exe`. The previous `--onedir` release required its `_internal`
+  runtime directory and therefore failed with a missing `python311.dll` after that
+  directory was deleted. The replacement release is a portable EXE; operators must
+  delete the old EXE and `_internal` folder, then download the new artifact.
+- Counter receipts and printer tests now feed five lines before the selected cutter
+  command. Hardware setup offers Star TSP700II/TSP743II full/partial cut plus
+  ESC/POS full/partial alternatives, allowing the command to match the active
+  printer emulation. Existing saved `star` and `escpos` profile values remain
+  compatible.
+
 The single-main-computer POS has been built and hardened through **2026-09-18** and
 is **good to go** after the operator installs the current EXE and verifies the Star
 receipt and XSP-210 KOT test prints. The confirmed main-PC configuration is: Star
