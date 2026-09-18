@@ -139,6 +139,10 @@
             </div>
         </div>
 
+        <div v-if="toastMessage" class="fixed bottom-5 right-5 z-[70] max-w-sm rounded-2xl border border-emerald-400/40 bg-[#20242b] px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status" aria-live="polite">
+            {{ toastMessage }}
+        </div>
+
         <!-- Authentication Screen (Only when users exist and not logged in) -->
         <div v-if="bootReady && users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
             <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center relative overflow-hidden">
@@ -179,9 +183,25 @@
             </div>
         </div>
 
+        <!-- First-run setup: the application is never unrestricted when no account exists. -->
+        <div v-if="bootReady && users.length === 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-8 border border-[#252730] text-center">
+                <i class="fa-solid fa-user-shield text-3xl text-amber-400 mb-4"></i>
+                <h2 class="font-royal text-2xl font-bold tracking-wider text-white">Create Administrator</h2>
+                <p class="text-xs text-neu-muted mt-2 mb-6">Set up the first secured administrator account to unlock the POS.</p>
+                <form @submit.prevent="submitInitialSetup" class="space-y-3 text-left">
+                    <input v-model.trim="setupForm.name" type="text" required placeholder="Full name" class="w-full neu-input text-xs text-white rounded-xl px-4 py-3 outline-none">
+                    <input v-model.trim="setupForm.username" type="text" required autocomplete="username" placeholder="Username" class="w-full neu-input text-xs text-white rounded-xl px-4 py-3 outline-none">
+                    <input v-model="setupForm.password" type="password" required minlength="8" autocomplete="new-password" placeholder="Password (at least 8 characters)" class="w-full neu-input text-xs text-white rounded-xl px-4 py-3 outline-none">
+                    <p v-if="setupError" class="text-xs text-neu-accent">{{ setupError }}</p>
+                    <button type="submit" class="w-full py-3 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow">Create Administrator & Unlock POS</button>
+                </form>
+            </div>
+        </div>
+
 
         <!-- Main Header Bar -->
-        <header v-if="bootReady && (currentUser || users.length === 0)" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
+        <header v-if="bootReady && currentUser" class="bg-[#1e2026] neu-flat z-20 flex flex-col border-b border-[#252730]">
             <!-- Top Branding & User Info Row -->
             <div class="h-16 px-6 flex items-center justify-between border-b border-[#252730]/60">
                 <div class="flex items-center space-x-3">
@@ -277,7 +297,7 @@
             </div>
         </header>
 
-        <main v-if="bootReady && (currentUser || users.length === 0)" class="flex-1 overflow-hidden relative">
+        <main v-if="bootReady && currentUser" class="flex-1 overflow-hidden relative">
             <!-- Admin Panel Dedicated Page Tab -->
             <div v-show="currentTab === 'admin' && hasPermission('admin_dash')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#262832]">
@@ -577,6 +597,8 @@
                             <button @click="savePrinterSettings" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save Hardware Printer Setup</button>
                             <p v-if="printerScanError" class="text-[11px] text-amber-400">{{ printerScanError }}</p>
                             <p v-else-if="availablePrinters.length === 0" class="text-[11px] text-neu-muted">No printer drivers were found. Install or connect a printer, then scan again.</p>
+                            <p v-else class="text-[11px] text-neu-muted">Showing {{ availablePrinters.length }} installed system print queue(s). A printer must be connected and available through its operating-system driver to appear here.</p>
+                            <p class="text-[11px] text-neu-muted">Receipts are sent as raw text ending immediately after the footer. The printer model/driver controls any unavoidable cutter feed.</p>
                         </div>
                     </div>
                 </div>
@@ -625,7 +647,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                                 <span class="font-bold text-white block">Download System JSON Backup</span>
-                                <p class="text-[10px] text-neu-muted">Exports all menu items, inventory, transactions, customers & users.</p>
+                                <p class="text-[10px] text-neu-muted">Exports business data, including menus, inventory, orders, tables, and active kitchen tickets. User accounts remain in the native database backup.</p>
                                 <button @click="exportBackupFile" class="w-full py-2.5 bg-blue-500 text-white font-bold rounded-xl shadow">Export Backup File</button>
                             </div>
 
@@ -1724,7 +1746,7 @@
                         </div>
                         <div>
                             <label class="text-neu-muted block mb-1">Password</label>
-                            <input type="password" v-model="newUserForm.password" placeholder="123" required class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            <input type="password" v-model="newUserForm.password" :placeholder="editingUserIndex !== null ? 'Leave blank to keep current password' : 'Set a password (at least 8 characters)'" :required="editingUserIndex === null" minlength="8" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
                         </div>
                     </div>
 
@@ -1817,8 +1839,12 @@
                 return {
                     currentUser: null,
                     bootReady: false,
+                    bootError: '',
+                    toastTimer: null,
                     loginForm: { username: '', password: '' },
                     loginError: '',
+                    setupForm: { name: '', username: '', password: '' },
+                    setupError: '',
 
                     users: [],
 
@@ -2096,9 +2122,7 @@
             async mounted() {
                 this.updateClock();
                 setInterval(this.updateClock, 1000);
-                await this.loadPersistentData();
-                await this.detectSystemPrinters();
-                this.bootReady = true;
+                await this.startBoot();
             },
 
             methods: {
@@ -2158,6 +2182,7 @@
                             qty: 1
                         });
                     }
+                    this.saveLocalStorageBackup();
                     this.showToast(`Added ${item.name}`);
                 },
 
@@ -2166,6 +2191,7 @@
                     if (item.qty <= 0) {
                         this.cart = this.cart.filter(c => c.id !== item.id);
                     }
+                    this.saveLocalStorageBackup();
                 },
 
                 clearCart() {
@@ -2173,6 +2199,7 @@
                     this.activeCustomerName = '';
                     this.activeCustomerPhone = '';
                     this.activeCustomerAddress = '';
+                    this.saveLocalStorageBackup();
                     this.showToast('Cart cleared');
                 },
 
@@ -2184,6 +2211,10 @@
 
                 sendOrderToQueue() {
                     if (this.cart.length === 0) return;
+                    if (this.kdsOrders.some(order => order.id === this.currentOrderId)) {
+                        this.showToast(`Order #${this.currentOrderId} is already in the kitchen queue.`);
+                        return;
+                    }
 
                     if (this.orderType === 'Dine-In') {
                         if (!this.selectedTable) {
@@ -2216,6 +2247,7 @@
                     };
 
                     this.kdsOrders.unshift(newTicket);
+                    this.saveLocalStorageBackup();
                     this.showToast(`Order #${this.currentOrderId} sent to Kitchen Queue!`);
                     if (this.printerConfig.autoPrintKitchen) {
                         this.triggerThermalPrint({
@@ -2480,7 +2512,32 @@
                     this.showToast('Menu item removed');
                 },
 
+                deductRecipeInventory() {
+                    const required = new Map();
+                    this.cart.forEach(dish => (dish.recipe || []).forEach(recipeItem => {
+                        const quantity = Number(recipeItem.qty || 0) * Number(dish.qty || 0);
+                        if (quantity > 0) required.set(recipeItem.ingredientId, (required.get(recipeItem.ingredientId) || 0) + quantity);
+                    }));
+                    for (const [ingredientId, quantity] of required) {
+                        const ingredient = this.inventory.find(item => item.id === ingredientId);
+                        if (!ingredient) {
+                            this.showToast('An ordered dish references a missing inventory ingredient.');
+                            return false;
+                        }
+                        if (Number(ingredient.qty || 0) < quantity) {
+                            this.showToast(`Insufficient ${ingredient.name}: need ${quantity} ${ingredient.unit}, have ${ingredient.qty} ${ingredient.unit}.`);
+                            return false;
+                        }
+                    }
+                    for (const [ingredientId, quantity] of required) {
+                        const ingredient = this.inventory.find(item => item.id === ingredientId);
+                        ingredient.qty = Number((Number(ingredient.qty) - quantity).toFixed(3));
+                    }
+                    return true;
+                },
+
                 completeOrder() {
+                    if (!this.deductRecipeInventory()) return;
                     this.showCheckoutModal = false;
 
                     const newRecord = {
@@ -2504,6 +2561,7 @@
                     };
 
                     this.orderHistory.unshift(newRecord);
+                    this.kdsOrders = this.kdsOrders.filter(order => order.id !== this.currentOrderId);
 
                     // Keep one reusable profile per phone number (or, when no phone is
                     // supplied, per customer name) so future orders can autocomplete it.
@@ -2742,7 +2800,7 @@
                     this.newUserForm = {
                         name: u.name,
                         username: u.username,
-                        password: u.password,
+                        password: '',
                         role: u.role,
                         permissions: [...u.permissions]
                     };
@@ -2750,8 +2808,11 @@
                 },
 
                 async saveUser() {
-                    if (!this.newUserForm.name || !this.newUserForm.username || !this.newUserForm.password) return;
                     const existing = this.editingUserIndex !== null ? this.users[this.editingUserIndex] : null;
+                    if (!this.newUserForm.name || !this.newUserForm.username || (!existing && !this.newUserForm.password)) {
+                        this.showToast('Name, username, and a password for a new user are required.');
+                        return;
+                    }
                     if (!window.pywebview?.api?.save_user) {
                         this.showToast('Database service is unavailable.');
                         return;
@@ -2772,7 +2833,10 @@
                     const result = await window.pywebview.api.delete_user(user.id);
                     if (result.ok) {
                         this.users = result.users;
+                        if (this.currentUser && this.currentUser.id === user.id) this.logout();
                         this.showToast('User account removed from disk!');
+                    } else {
+                        this.showToast(result.error || 'Unable to delete user.');
                     }
                 },
 
@@ -2789,9 +2853,20 @@
                         orderHistory: this.orderHistory, purchaseHistory: this.purchaseHistory,
                         customers: this.customers, inventory: this.inventory, menuItems: this.menuItems,
                         categories: this.categories, expenses: this.expenses,
-                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig
+                        dailyOpeningCash: this.dailyOpeningCash, printerConfig: this.printerConfig,
+                        tables: this.tables, kdsOrders: this.kdsOrders, currentOrderId: this.currentOrderId,
+                        cart: this.cart, orderType: this.orderType,
+                        selectedTableId: this.selectedTable ? this.selectedTable.id : null,
+                        activeCustomerName: this.activeCustomerName, activeCustomerPhone: this.activeCustomerPhone,
+                        activeCustomerAddress: this.activeCustomerAddress, deliveryFeeInput: this.deliveryFeeInput
                     };
-                    await window.pywebview.api.save_state(state);
+                    try {
+                        const result = await window.pywebview.api.save_state(state);
+                        if (!result.ok) this.showToast('Unable to save POS data.');
+                    } catch (error) {
+                        console.error('POS state save failed:', error);
+                        this.showToast('Unable to save POS data.');
+                    }
                 },
 
                 async loadPersistentData() {
@@ -2808,6 +2883,16 @@
                     if (saved.expenses) this.expenses = saved.expenses;
                     if (saved.dailyOpeningCash !== undefined) this.dailyOpeningCash = saved.dailyOpeningCash;
                     if (saved.printerConfig) this.printerConfig = saved.printerConfig;
+                    if (Array.isArray(saved.tables)) this.tables = saved.tables;
+                    if (Array.isArray(saved.kdsOrders)) this.kdsOrders = saved.kdsOrders;
+                    if (saved.currentOrderId) this.currentOrderId = String(saved.currentOrderId);
+                    if (Array.isArray(saved.cart)) this.cart = saved.cart;
+                    if (saved.orderType) this.orderType = saved.orderType;
+                    if (saved.activeCustomerName) this.activeCustomerName = saved.activeCustomerName;
+                    if (saved.activeCustomerPhone) this.activeCustomerPhone = saved.activeCustomerPhone;
+                    if (saved.activeCustomerAddress) this.activeCustomerAddress = saved.activeCustomerAddress;
+                    if (saved.deliveryFeeInput !== undefined) this.deliveryFeeInput = saved.deliveryFeeInput;
+                    if (saved.selectedTableId !== undefined) this.selectedTable = this.tables.find(table => table.id === saved.selectedTableId) || null;
                     this.backupDirectory = await window.pywebview.api.get_backup_directory();
                 },
 
@@ -2826,9 +2911,7 @@
                         if (!result.cancelled) this.showToast(result.error || 'Restore failed.');
                         return;
                     }
-                    this.users = result.boot.users || [];
-                    const saved = result.boot.state || {};
-                    Object.keys(saved).forEach(key => { if (key in this.$data) this[key] = saved[key]; });
+                    await this.loadPersistentData();
                     this.currentUser = null;
                     this.showToast('Database restored. Please sign in.');
                 },
@@ -2844,6 +2927,17 @@
                             expenses: this.expenses,
                             dailyOpeningCash: this.dailyOpeningCash,
                             printerConfig: this.printerConfig,
+                            purchaseHistory: this.purchaseHistory,
+                            tables: this.tables,
+                            kdsOrders: this.kdsOrders,
+                            currentOrderId: this.currentOrderId,
+                            cart: this.cart,
+                            orderType: this.orderType,
+                            selectedTableId: this.selectedTable ? this.selectedTable.id : null,
+                            activeCustomerName: this.activeCustomerName,
+                            activeCustomerPhone: this.activeCustomerPhone,
+                            activeCustomerAddress: this.activeCustomerAddress,
+                            deliveryFeeInput: this.deliveryFeeInput,
                             exportedAt: new Date().toISOString()
                         };
                         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
@@ -2854,7 +2948,10 @@
                         downloadAnchor.click();
                         downloadAnchor.remove();
                         this.showToast('Backup JSON exported!');
-                    } catch (err) {}
+                    } catch (err) {
+                        console.error('JSON backup export failed:', err);
+                        this.showToast('Unable to export the JSON backup.');
+                    }
                 },
 
                 importRestoreFile(event) {
@@ -2872,34 +2969,79 @@
                             if (parsed.expenses) this.expenses = parsed.expenses;
                             if (parsed.dailyOpeningCash !== undefined) this.dailyOpeningCash = parsed.dailyOpeningCash;
                             if (parsed.printerConfig) this.printerConfig = parsed.printerConfig;
+                            if (parsed.purchaseHistory) this.purchaseHistory = parsed.purchaseHistory;
+                            if (parsed.tables) this.tables = parsed.tables;
+                            if (parsed.kdsOrders) this.kdsOrders = parsed.kdsOrders;
+                            if (parsed.currentOrderId) this.currentOrderId = String(parsed.currentOrderId);
+                            if (parsed.cart) this.cart = parsed.cart;
+                            if (parsed.orderType) this.orderType = parsed.orderType;
+                            this.selectedTable = this.tables.find(table => table.id === parsed.selectedTableId) || null;
+                            this.activeCustomerName = parsed.activeCustomerName || '';
+                            this.activeCustomerPhone = parsed.activeCustomerPhone || '';
+                            this.activeCustomerAddress = parsed.activeCustomerAddress || '';
+                            this.deliveryFeeInput = parsed.deliveryFeeInput ?? null;
 
                             this.saveLocalStorageBackup();
                             this.showBackupModal = false;
                             this.showToast('Data restored!');
-                        } catch (err) {}
+                        } catch (err) {
+                            console.error('JSON backup import failed:', err);
+                            this.showToast('The selected JSON backup is invalid.');
+                        }
                     };
                     reader.readAsText(file);
                 },
 
-                handleLogin() {
-                    const inputUsername = (this.loginForm.username || '').trim().toLowerCase();
-                    const inputPassword = (this.loginForm.password || '').trim();
-                    const found = this.users.find(u => (u.username || '').trim().toLowerCase() === inputUsername && u.password === inputPassword);
-                    if (found) {
-                        this.currentUser = found;
-                        this.loginError = '';
-                        this.showToast(`Welcome ${found.name}`);
-                    } else {
-                        this.loginError = 'Invalid credentials';
+                async handleLogin() {
+                    if (!window.pywebview?.api?.authenticate) {
+                        this.loginError = 'Authentication service is unavailable.';
+                        return;
+                    }
+                    try {
+                        const result = await window.pywebview.api.authenticate(this.loginForm.username, this.loginForm.password);
+                        if (result.ok) {
+                            this.currentUser = result.user;
+                            this.loginError = '';
+                            this.loginForm.password = '';
+                            this.showToast(`Welcome ${result.user.name}`);
+                        } else {
+                            this.loginError = result.error || 'Invalid credentials';
+                        }
+                    } catch (error) {
+                        console.error('Authentication failed:', error);
+                        this.loginError = 'Authentication service is unavailable.';
                     }
                 },
 
-                quickLogin(roleName) {
-                    const found = this.users.find(u => u.username === roleName);
-                    if (found) {
-                        this.loginForm.username = found.username;
-                        this.loginForm.password = found.password;
-                        this.handleLogin();
+                async submitInitialSetup() {
+                    this.setupError = '';
+                    if (!window.pywebview?.api?.save_user || !window.pywebview?.api?.authenticate) {
+                        this.setupError = 'Account service is unavailable.';
+                        return;
+                    }
+                    const user = {
+                        ...this.setupForm,
+                        role: 'Admin',
+                        permissions: ['pos', 'kds', 'menu_manage', 'inventory', 'tables', 'history', 'customers', 'admin_dash']
+                    };
+                    try {
+                        const saved = await window.pywebview.api.save_user(user);
+                        if (!saved.ok) {
+                            this.setupError = saved.error || 'Unable to create the administrator account.';
+                            return;
+                        }
+                        const signedIn = await window.pywebview.api.authenticate(user.username, user.password);
+                        if (!signedIn.ok) {
+                            this.setupError = signedIn.error || 'Account was created, but sign-in failed.';
+                            return;
+                        }
+                        this.users = saved.users;
+                        this.currentUser = signedIn.user;
+                        this.setupForm = { name: '', username: '', password: '' };
+                        this.showToast(`Welcome ${signedIn.user.name}`);
+                    } catch (error) {
+                        console.error('Initial setup failed:', error);
+                        this.setupError = 'Account service is unavailable.';
                     }
                 },
 
@@ -2908,7 +3050,6 @@
                 },
 
                 hasPermission(perm) {
-                    if (this.users.length === 0) return true;
                     return this.currentUser && this.currentUser.permissions && this.currentUser.permissions.includes(perm);
                 },
 
@@ -2918,6 +3059,7 @@
                     } else {
                         this.kdsOrders = this.kdsOrders.filter(o => o.id !== order.id);
                     }
+                    this.saveLocalStorageBackup();
                 },
 
                 proceedToCheckout() {
@@ -2958,6 +3100,7 @@
                         });
                     }
                     this.showTableModal = false;
+                    this.saveLocalStorageBackup();
                 },
 
                 deleteTable(tableId) {
@@ -2965,6 +3108,7 @@
                     if (this.selectedTable && this.selectedTable.id === tableId) {
                         this.selectedTable = null;
                     }
+                    this.saveLocalStorageBackup();
                 },
 
                 clickTableCard(table) {
@@ -2989,16 +3133,20 @@
                     this.selectedTable = table;
                     this.orderType = 'Dine-In';
                     this.currentTab = 'pos';
+                    this.saveLocalStorageBackup();
                     this.showToast(`Selected Table ${table.name}`);
                 },
 
                 releaseTable(table) {
                     table.status = 'Available';
+                    this.saveLocalStorageBackup();
                     this.showToast(`${table.name} marked Available`);
                 },
 
                 showToast(msg) {
-                    // Toast notifications disabled per user request
+                    this.toastMessage = msg;
+                    clearTimeout(this.toastTimer);
+                    this.toastTimer = setTimeout(() => { this.toastMessage = ''; }, 3500);
                 }
             }
         }).mount('#app');

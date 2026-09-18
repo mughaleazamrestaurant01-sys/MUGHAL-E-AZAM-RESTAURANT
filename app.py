@@ -1,5 +1,8 @@
 import json
 import os
+import hashlib
+import hmac
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -64,6 +67,31 @@ class Api:
             db.execute('CREATE TABLE IF NOT EXISTS application_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
 
+    @staticmethod
+    def _hash_password(password, salt=None):
+        salt = salt or secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 200_000)
+        return f'pbkdf2_sha256${salt}${digest.hex()}'
+
+    @staticmethod
+    def _verify_password(password, stored):
+        if stored.startswith('pbkdf2_sha256$'):
+            try:
+                _, salt, expected = stored.split('$', 2)
+                actual = Api._hash_password(password, salt)
+                return hmac.compare_digest(actual, stored)
+            except (TypeError, ValueError):
+                return False
+        # Migrate legacy plaintext credentials after their first successful login.
+        return hmac.compare_digest(password, stored)
+
+    @staticmethod
+    def _public_user(row):
+        return {
+            'id': row['id'], 'name': row['name'], 'username': row['username'],
+            'role': row['role'], 'permissions': json.loads(row['permissions'])
+        }
+
     def _backup_after_write(self):
         with self._connection() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'backup_directory'").fetchone()
@@ -86,21 +114,39 @@ class Api:
     def list_users(self):
         with self._connection() as db:
             rows = db.execute('SELECT id, name, username, password, role, permissions FROM users ORDER BY id').fetchall()
-        return [{**dict(row), 'permissions': json.loads(row['permissions'])} for row in rows]
+        return [self._public_user(row) for row in rows]
+
+    def authenticate(self, username, password):
+        username = (username or '').strip()
+        password = password or ''
+        with self._connection() as db:
+            row = db.execute('SELECT id, name, username, password, role, permissions FROM users WHERE username = ?', (username,)).fetchone()
+            if not row or not self._verify_password(password, row['password']):
+                return {'ok': False, 'error': 'Invalid credentials.'}
+            if not row['password'].startswith('pbkdf2_sha256$'):
+                db.execute('UPDATE users SET password = ? WHERE id = ?', (self._hash_password(password), row['id']))
+                row = db.execute('SELECT id, name, username, password, role, permissions FROM users WHERE id = ?', (row['id'],)).fetchone()
+        return {'ok': True, 'user': self._public_user(row)}
 
     def save_user(self, user, user_id=None):
         username = (user.get('username') or '').strip()
-        if not username or not user.get('password') or not user.get('name'):
-            return {'ok': False, 'error': 'Name, username, and password are required.'}
+        if not username or not user.get('name') or (user_id is None and not user.get('password')):
+            return {'ok': False, 'error': 'Name and username are required; a password is required for a new user.'}
+        if user.get('password') and len(user['password']) < 8:
+            return {'ok': False, 'error': 'Passwords must contain at least 8 characters.'}
         try:
             with self._connection() as db:
                 if user_id is None:
                     cursor = db.execute('INSERT INTO users (username, password, role, name, permissions) VALUES (?, ?, ?, ?, ?)',
-                        (username, user['password'], user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', []))))
+                        (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', []))))
                     user_id = cursor.lastrowid
                 else:
-                    db.execute('UPDATE users SET username=?, password=?, role=?, name=?, permissions=? WHERE id=?',
-                        (username, user['password'], user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', [])), user_id))
+                    if user.get('password'):
+                        db.execute('UPDATE users SET username=?, password=?, role=?, name=?, permissions=? WHERE id=?',
+                            (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', [])), user_id))
+                    else:
+                        db.execute('UPDATE users SET username=?, role=?, name=?, permissions=? WHERE id=?',
+                            (username, user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', [])), user_id))
             self._backup_after_write()
             return {'ok': True, 'users': self.list_users(), 'id': user_id}
         except sqlite3.IntegrityError:
@@ -108,7 +154,11 @@ class Api:
 
     def delete_user(self, user_id):
         with self._connection() as db:
-            db.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+            if count <= 1:
+                return {'ok': False, 'error': 'The last user account cannot be deleted.'}
+            if db.execute('DELETE FROM users WHERE id = ?', (user_id,)).rowcount != 1:
+                return {'ok': False, 'error': 'The requested user account was not found.'}
         self._backup_after_write()
         return {'ok': True, 'users': self.list_users()}
 
@@ -127,6 +177,7 @@ class Api:
         return {'ok': True}
 
     def get_system_printers(self):
+        """Return installed system print queues; physical-device discovery is driver/OS-owned."""
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -145,7 +196,38 @@ class Api:
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
             return {'status': 'error', 'message': 'Select a system printer first.'}
-        text = f"{receipt_data.get('title', 'RECEIPT')}\nOrder: {receipt_data.get('orderId', '')}\n\n\n"
+        def money(value):
+            return f"Rs. {float(value or 0):.2f}"
+
+        width = 32
+        def line(left='', right=''):
+            left, right = str(left), str(right)
+            return left[:width - len(right) - 1] + ' ' * max(1, width - len(left[:width - len(right) - 1]) - len(right)) + right
+
+        lines = [receipt_data.get('header') or 'MUGHAL-E-AZAM - RESTAURANT', receipt_data.get('title', 'RECEIPT'), '-' * width]
+        lines.append(f"Order: {receipt_data.get('orderId', '')}")
+        if receipt_data.get('time'):
+            lines.append(f"Time: {receipt_data['time']}")
+        if receipt_data.get('tableName'):
+            lines.append(f"Table: {receipt_data['tableName']}")
+        if receipt_data.get('customerName'):
+            lines.append(f"Customer: {receipt_data['customerName']}")
+        lines.append('-' * width)
+        for item in receipt_data.get('items', []):
+            qty, name, price = item.get('qty', 0), item.get('name', ''), item.get('price', 0)
+            lines.append(f"{qty}x {name}"[:width])
+            lines.append(line('', money(float(qty or 0) * float(price or 0))))
+        lines.append('-' * width)
+        lines.append(line('Subtotal', money(receipt_data.get('subtotal'))))
+        if float(receipt_data.get('discount') or 0):
+            lines.append(line('Discount', '-' + money(receipt_data.get('discount'))))
+        if float(receipt_data.get('deliveryFee') or 0):
+            lines.append(line('Delivery', money(receipt_data.get('deliveryFee'))))
+        lines.append(line('TOTAL', money(receipt_data.get('grandTotal'))))
+        lines.extend(['-' * width, receipt_data.get('receiptFooter') or 'Thank you!'])
+        # Do not add blank lines or a form feed: the printer/driver decides its minimum
+        # cutter feed, while the receipt content itself ends exactly after the footer.
+        text = '\n'.join(lines) + '\n'
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -159,7 +241,7 @@ class Api:
                 finally:
                     win32print.ClosePrinter(printer)
             else:
-                result = subprocess.run(['lp', '-d', printer_name], input=text.encode('utf-8'), capture_output=True, check=False)
+                result = subprocess.run(['lp', '-d', printer_name, '-o', 'raw'], input=text.encode('utf-8'), capture_output=True, check=False)
                 if result.returncode:
                     raise RuntimeError(result.stderr.decode(errors='replace').strip())
             return {'status': 'success', 'message': f'Print job sent to {printer_name}.'}
@@ -193,6 +275,10 @@ class Api:
         os.close(fd)
         try:
             shutil.copy2(source, temporary)
+            with sqlite3.connect(temporary) as candidate:
+                if candidate.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                    return {'ok': False, 'error': 'The selected backup database failed its integrity check.'}
+                candidate.execute('SELECT 1 FROM users LIMIT 1')
             # Connections are short-lived, so no connection pool remains open here.
             os.replace(temporary, self.database_path)
             return {'ok': True, 'boot': self.get_boot_data()}
