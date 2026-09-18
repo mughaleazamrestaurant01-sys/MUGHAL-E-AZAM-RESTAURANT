@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import argparse
+import functools
 import http.server
 import time
 import urllib.error
@@ -28,6 +29,55 @@ def get_data_dir():
     path = os.path.join(root or os.path.expanduser('~'), 'MughalEAzamPOS')
     os.makedirs(path, exist_ok=True)
     return path
+
+
+class LocalAssetServer:
+    """Serve the bundled interface from a private, verified loopback address.
+
+    Loading the POS from ``file://`` makes the WebView bridge dependent on the
+    browser engine's local-file security policy.  That policy differs between
+    installed Windows WebView runtimes and was the source of the startup screen
+    becoming stuck.  A loopback-only server gives every runtime the same normal
+    document origin without exposing the POS on the restaurant network.
+    """
+
+    def __init__(self, directory):
+        handler = functools.partial(self._handler(), directory=directory)
+        self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, name='pos-assets', daemon=True)
+
+    @staticmethod
+    def _handler():
+        class QuietAssetHandler(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                pass
+
+        return QuietAssetHandler
+
+    @property
+    def url(self):
+        host, port = self.server.server_address[:2]
+        return f'http://{host}:{port}/index.html'
+
+    def start(self):
+        self.thread.start()
+        # The listening socket is created before the thread starts.  Verify the
+        # actual entry document now, so a packaging/path problem is reported
+        # before a WebView window is created.
+        try:
+            with urllib.request.urlopen(self.url, timeout=3) as response:
+                if response.status != 200:
+                    raise RuntimeError(f'asset server returned HTTP {response.status}')
+        except Exception:
+            self.close()
+            raise
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2)
 
 
 class Api:
@@ -600,20 +650,25 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
+    asset_server = None
     try:
-        # The installed Windows runtime is proven to load local bundled files;
-        # avoiding a second local server removes a failure point at launch.
-        local_html = os.path.join(get_base_dir(), 'index.html')
+        # Start the UI endpoint before the window exists.  This replaces the
+        # file-origin launch path and its fragile browser-side startup polling.
+        asset_server = LocalAssetServer(get_base_dir())
+        asset_server.start()
         api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
         if args.share_lan:
             threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+        api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', asset_server.url, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
         webview.start()
     except Exception as exc:
         # Do not leave an invisible process holding a launch mutex. The next
         # launch is always allowed, and this failure is visible in a console log.
         print(f'POS startup failed: {exc}', file=sys.stderr)
         raise
+    finally:
+        if asset_server:
+            asset_server.close()
 
 
 if __name__ == '__main__':
