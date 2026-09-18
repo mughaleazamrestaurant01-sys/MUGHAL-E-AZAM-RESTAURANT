@@ -273,38 +273,80 @@ class Api:
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
             return {'status': 'error', 'message': 'Select a system printer first.'}
+
         def money(value):
             return f"Rs. {float(value or 0):.2f}"
 
         width = 32
+        is_kot = receipt_data.get('isKot', False)
+
+        def center(value=''):
+            value = str(value or '')[:width]
+            return value.center(width)
+
         def line(left='', right=''):
             left, right = str(left), str(right)
             return left[:width - len(right) - 1] + ' ' * max(1, width - len(left[:width - len(right) - 1]) - len(right)) + right
 
-        lines = [receipt_data.get('header') or 'MUGHAL-E-AZAM - RESTAURANT', receipt_data.get('title', 'RECEIPT'), '-' * width]
-        lines.append(f"Order: {receipt_data.get('orderId', '')}")
-        if receipt_data.get('time'):
-            lines.append(f"Time: {receipt_data['time']}")
-        if receipt_data.get('tableName'):
-            lines.append(f"Table: {receipt_data['tableName']}")
-        if receipt_data.get('customerName'):
-            lines.append(f"Customer: {receipt_data['customerName']}")
-        lines.append('-' * width)
-        for item in receipt_data.get('items', []):
-            qty, name, price = item.get('qty', 0), item.get('name', ''), item.get('price', 0)
-            lines.append(f"{qty}x {name}"[:width])
-            lines.append(line('', money(float(qty or 0) * float(price or 0))))
-        lines.append('-' * width)
-        lines.append(line('Subtotal', money(receipt_data.get('subtotal'))))
-        if float(receipt_data.get('discount') or 0):
-            lines.append(line('Discount', '-' + money(receipt_data.get('discount'))))
-        if float(receipt_data.get('deliveryFee') or 0):
-            lines.append(line('Delivery', money(receipt_data.get('deliveryFee'))))
-        lines.append(line('TOTAL', money(receipt_data.get('grandTotal'))))
-        lines.extend(['-' * width, receipt_data.get('receiptFooter') or 'Thank you!'])
-        # Do not add blank lines or a form feed: the printer/driver decides its minimum
-        # cutter feed, while the receipt content itself ends exactly after the footer.
-        text = '\n'.join(lines) + '\n'
+        if is_kot:
+            lines = [center('KITCHEN ORDER TICKET'), '-' * width,
+                     f"Order: {receipt_data.get('orderId', '')}"]
+            if receipt_data.get('time'):
+                lines.append(f"Time: {receipt_data['time']}")
+            if receipt_data.get('orderType'):
+                lines.append(f"Type: {receipt_data['orderType']}")
+            if receipt_data.get('tableName'):
+                lines.append(f"Table: {receipt_data['tableName']}")
+            if receipt_data.get('customerName'):
+                lines.append(f"Customer: {receipt_data['customerName']}")
+            lines.append('-' * width)
+            for item in receipt_data.get('items', []):
+                lines.append(f"{item.get('qty', 0)}x {item.get('name', '')}"[:width])
+            lines.append('-' * width)
+        else:
+            lines = [
+                center(receipt_data.get('restaurantName') or receipt_data.get('header') or 'MUGHAL-E-AZAM RESTAURANT'),
+                center(receipt_data.get('restaurantTagline')),
+                center(receipt_data.get('restaurantAddress')),
+                center(receipt_data.get('restaurantPhone')),
+                '-' * width,
+                center(receipt_data.get('title', 'RECEIPT')),
+                '-' * width,
+                line('Order #', receipt_data.get('orderId', '')),
+            ]
+            if receipt_data.get('time'):
+                lines.append(line('Date / Time', receipt_data['time']))
+            if receipt_data.get('orderType'):
+                lines.append(line('Order Type', receipt_data['orderType']))
+            if receipt_data.get('tableName'):
+                lines.append(line('Table', receipt_data['tableName']))
+            if receipt_data.get('customerName'):
+                lines.append(line('Customer', receipt_data['customerName']))
+            if receipt_data.get('customerPhone'):
+                lines.append(line('Phone', receipt_data['customerPhone']))
+            if receipt_data.get('customerAddress'):
+                lines.append('Address:')
+                lines.extend(str(receipt_data['customerAddress'])[i:i + width] for i in range(0, len(str(receipt_data['customerAddress'])), width))
+            lines.append('-' * width)
+            for item in receipt_data.get('items', []):
+                qty, name, price = item.get('qty', 0), item.get('name', ''), item.get('price', 0)
+                lines.append(f"{qty}x {name}"[:width])
+                lines.append(line('', money(float(qty or 0) * float(price or 0))))
+            lines.append('-' * width)
+            lines.append(line('Subtotal', money(receipt_data.get('subtotal'))))
+            if float(receipt_data.get('discount') or 0):
+                lines.append(line('Discount', '-' + money(receipt_data.get('discount'))))
+            if float(receipt_data.get('deliveryFee') or 0):
+                lines.append(line('Delivery Fee', money(receipt_data.get('deliveryFee'))))
+            lines.append(line('TOTAL', money(receipt_data.get('grandTotal'))))
+            if receipt_data.get('paymentMethod'):
+                lines.append(line('Payment', receipt_data['paymentMethod']))
+            lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
+
+        text = '\n'.join(line for line in lines if line is not None) + '\n'
+        # Star printers use ESC i, while most KOT/ESC-POS printers use GS V B 0.
+        cut_mode = receipt_data.get('cutMode', 'escpos')
+        cut_command = b'\x1b\x69' if cut_mode == 'star' else b'\x1dV\x42\x00'
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -312,13 +354,13 @@ class Api:
                 try:
                     win32print.StartDocPrinter(printer, 1, ('POS Receipt', None, 'RAW'))
                     win32print.StartPagePrinter(printer)
-                    win32print.WritePrinter(printer, text.encode('utf-8') + b'\x1dV\x42\x00')
+                    win32print.WritePrinter(printer, text.encode('utf-8') + cut_command)
                     win32print.EndPagePrinter(printer)
                     win32print.EndDocPrinter(printer)
                 finally:
                     win32print.ClosePrinter(printer)
             else:
-                result = subprocess.run(['lp', '-d', printer_name, '-o', 'raw'], input=text.encode('utf-8'), capture_output=True, check=False)
+                result = subprocess.run(['lp', '-d', printer_name, '-o', 'raw'], input=text.encode('utf-8') + cut_command, capture_output=True, check=False)
                 if result.returncode:
                     raise RuntimeError(result.stderr.decode(errors='replace').strip())
             return {'status': 'success', 'message': f'Print job sent to {printer_name}.'}

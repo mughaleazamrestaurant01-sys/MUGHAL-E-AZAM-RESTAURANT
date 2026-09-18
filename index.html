@@ -1391,14 +1391,20 @@
 
         <!-- Printable Thermal Receipt Area -->
         <div id="printable-area" class="hidden print:block">
-            <div class="text-center font-bold text-base uppercase border-b pb-1 mb-2">
-                {{ printerConfig.receiptHeader || 'MUGHAL-E-AZAM - RESTAURANT' }}
+            <div class="text-center border-b pb-2 mb-2">
+                <div class="font-black text-base uppercase tracking-wide">{{ printerConfig.restaurantName || printerConfig.receiptHeader || 'MUGHAL-E-AZAM RESTAURANT' }}</div>
+                <div v-if="printerConfig.restaurantTagline" class="text-[10px] font-semibold">{{ printerConfig.restaurantTagline }}</div>
+                <div v-if="printerConfig.restaurantAddress" class="text-[10px]">{{ printerConfig.restaurantAddress }}</div>
+                <div v-if="printerConfig.restaurantPhone" class="text-[10px]">{{ printerConfig.restaurantPhone }}</div>
             </div>
             <div class="text-xs mb-2">
-                <div>Type: <b>{{ printableReceipt.title || 'RECEIPT' }}</b></div>
+                <div class="text-center font-bold mb-1">{{ printableReceipt.title || 'RECEIPT' }}</div>
                 <div>Order #: <b>{{ printableReceipt.orderId }}</b></div>
                 <div>Date/Time: {{ printableReceipt.time }}</div>
+                <div v-if="printableReceipt.orderType">Order Type: {{ printableReceipt.orderType }}</div>
                 <div v-if="printableReceipt.customerName">Customer: {{ printableReceipt.customerName }}</div>
+                <div v-if="printableReceipt.customerPhone">Phone: {{ printableReceipt.customerPhone }}</div>
+                <div v-if="printableReceipt.customerAddress">Address: {{ printableReceipt.customerAddress }}</div>
                 <div v-if="printableReceipt.tableName">Table: {{ printableReceipt.tableName }}</div>
             </div>
             <div class="border-t border-b py-2 mb-2">
@@ -1414,7 +1420,7 @@
                 <div class="flex justify-between font-bold text-sm border-t pt-1 mt-1"><span>Total:</span><span>Rs. {{ printableReceipt.grandTotal }}</span></div>
             </div>
             <div class="text-center text-[10px] mt-4 pt-2 border-t">
-                {{ printerConfig.receiptFooter || 'Thank you for dining at Mughal-E-Azam - Restaurant!' }}
+                {{ printerConfig.receiptFooter || 'Thank you for choosing Mughal-E-Azam. We look forward to serving you again!' }}
             </div>
         </div>
 
@@ -1579,6 +1585,20 @@
                     <div class="p-3 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                         <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Printer (KOT Queue)</span>
                         <input type="text" v-model="printerConfig.kitchenPrinterName" placeholder="e.g., Kitchen Thermal Printer" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                    </div>
+
+                    <div class="p-3 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
+                        <span class="font-bold text-sky-400 block"><i class="fa-solid fa-store mr-1"></i>Professional Customer Receipt</span>
+                        <input type="text" v-model="printerConfig.restaurantName" placeholder="Restaurant name" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                        <input type="text" v-model="printerConfig.restaurantTagline" placeholder="Tagline (optional)" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                        <input type="text" v-model="printerConfig.restaurantAddress" placeholder="Address (optional)" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                        <input type="text" v-model="printerConfig.restaurantPhone" placeholder="Phone (optional)" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                        <textarea v-model="printerConfig.receiptFooter" rows="2" placeholder="Professional receipt footer" class="w-full neu-input p-2 rounded-xl text-white outline-none"></textarea>
+                        <label class="text-neu-muted block">Counter printer cutter command</label>
+                        <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                            <option value="star">Star printer (ESC i cut)</option>
+                            <option value="escpos">Standard thermal / ESC-POS (GS V cut)</option>
+                        </select>
                     </div>
 
                     <button @click="savePrinterSettings" class="w-full py-3 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow">Save Printer Setup</button>
@@ -1876,8 +1896,13 @@
                     printerConfig: {
                         counterPrinterName: '',
                         kitchenPrinterName: '',
-                        receiptHeader: 'MUGHAL-E-AZAM - RESTAURANT',
-                        receiptFooter: 'Thank you for dining at Mughal-E-Azam - Restaurant!',
+                        receiptHeader: 'MUGHAL-E-AZAM RESTAURANT',
+                        restaurantName: 'MUGHAL-E-AZAM RESTAURANT',
+                        restaurantTagline: 'Authentic Taste. Royal Hospitality.',
+                        restaurantAddress: '',
+                        restaurantPhone: '',
+                        receiptFooter: 'Thank you for choosing Mughal-E-Azam. We look forward to serving you again!',
+                        receiptCutMode: 'star',
                         autoPrintKitchen: true // The Kitchen KOT button is the only action that sends a KOT.
                     },
 
@@ -2296,6 +2321,8 @@
                     if (this.printerConfig.autoPrintKitchen) {
                         this.triggerThermalPrint({
                             title: 'KITCHEN TICKET (KOT)',
+                            isKot: true,
+                            orderType: this.orderType,
                             orderId: this.currentOrderId,
                             time: this.currentTime,
                             tableName: this.selectedTable ? this.selectedTable.name : '',
@@ -2316,9 +2343,13 @@
                     this.triggerThermalPrint({
                         title: 'PROVISIONAL BILL',
                         orderId: this.currentOrderId,
+                        orderType: this.orderType,
                         time: this.currentTime,
                         tableName: this.selectedTable ? this.selectedTable.name : '',
                         customerName: this.activeCustomerName,
+                        customerPhone: this.activeCustomerPhone,
+                        customerAddress: this.activeCustomerAddress,
+                        paymentMethod: this.paymentMethod,
                         items: this.cart,
                         subtotal: this.subtotal,
                         discount: this.totalDiscountAmount,
@@ -2646,9 +2677,13 @@
                     this.triggerThermalPrint({
                         title: 'FINAL PAID RECEIPT',
                         orderId: this.currentOrderId,
+                        orderType: this.orderType,
                         time: this.currentTime,
                         tableName: this.selectedTable ? this.selectedTable.name : '',
                         customerName: this.activeCustomerName,
+                        customerPhone: this.activeCustomerPhone,
+                        customerAddress: this.activeCustomerAddress,
+                        paymentMethod: this.paymentMethod,
                         items: this.cart,
                         subtotal: this.subtotal,
                         discount: this.totalDiscountAmount,
@@ -2682,7 +2717,12 @@
                             const payload = {
                                 ...data,
                                 header: this.printerConfig.receiptHeader,
-                                receiptFooter: this.printerConfig.receiptFooter
+                                restaurantName: this.printerConfig.restaurantName,
+                                restaurantTagline: this.printerConfig.restaurantTagline,
+                                restaurantAddress: this.printerConfig.restaurantAddress,
+                                restaurantPhone: this.printerConfig.restaurantPhone,
+                                receiptFooter: this.printerConfig.receiptFooter,
+                                cutMode: data.isKot ? 'escpos' : this.printerConfig.receiptCutMode
                             };
                             const result = await window.pywebview.api.print_direct(target, payload);
                             if (result.status !== 'success') {
