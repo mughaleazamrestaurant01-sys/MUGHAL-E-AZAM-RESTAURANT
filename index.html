@@ -2128,6 +2128,7 @@
                 },
 
                 filteredDateOrders() {
+                    if (this.currentTab !== 'history') return [];
                     return this.orderHistory.filter(ord => ord.date === this.selectedHistoryDate);
                 },
 
@@ -2159,6 +2160,7 @@
                 },
 
                 categorySalesBreakdown() {
+                    if (this.currentTab !== 'admin') return [];
                     const totals = {};
                     this.categories.forEach(c => { if(c.id !== 'all') totals[c.id] = 0; });
                     this.orderHistory.forEach(ord => {
@@ -2175,21 +2177,22 @@
                     }));
                 },
 
-                // One watched snapshot covers every operational value that must
-                // survive a close/restart, including fields changed directly by
-                // v-model such as customer details and discounts.
-                operationalState() {
-                    return this.buildPersistentState();
-                }
             },
 
             watch: {
-                operationalState: {
-                    deep: true,
-                    handler() {
-                        if (this.persistenceReady) this.queuePersistentSave();
-                    }
-                }
+                // Watch only fields edited directly with v-model. All collection
+                // changes use queuePersistentSave in their action methods. This
+                // avoids deeply traversing the full orders/menu/stock history after
+                // every small UI update.
+                orderType() { this.queuePersistentSave(); },
+                selectedTable() { this.queuePersistentSave(); },
+                activeCustomerName() { this.queuePersistentSave(); },
+                activeCustomerPhone() { this.queuePersistentSave(); },
+                activeCustomerAddress() { this.queuePersistentSave(); },
+                deliveryFeeInput() { this.queuePersistentSave(); },
+                discountPercent() { this.queuePersistentSave(); },
+                paymentMethod() { this.queuePersistentSave(); },
+                cashTendered() { this.queuePersistentSave(); }
             },
 
             async mounted() {
@@ -2265,6 +2268,7 @@
                 },
 
                 queuePersistentSave() {
+                    if (!this.persistenceReady) return;
                     clearTimeout(this.persistenceTimer);
                     this.persistenceTimer = setTimeout(() => this.saveLocalStorageBackup(), 700);
                 },

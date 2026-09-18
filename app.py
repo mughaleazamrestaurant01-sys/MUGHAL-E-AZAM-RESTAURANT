@@ -62,16 +62,21 @@ class Api:
         self._initialize_database()
 
     def _connection(self):
-        connection = sqlite3.connect(self.database_path, timeout=10)
+        # Do not leave the UI appearing frozen for ten seconds when a second
+        # process or interrupted old instance has a database lock.
+        connection = sqlite3.connect(self.database_path, timeout=3)
         connection.row_factory = sqlite3.Row
-        connection.execute('PRAGMA busy_timeout = 10000')
+        connection.execute('PRAGMA busy_timeout = 3000')
         connection.execute('PRAGMA temp_store = MEMORY')
         connection.execute('PRAGMA cache_size = -8000')
         return connection
 
     def _initialize_database(self):
         with self._connection() as db:
-            db.execute('PRAGMA journal_mode = WAL')
+            # Setting journal_mode writes to the database and can block startup.
+            # Query first and only migrate older databases that are not yet WAL.
+            if db.execute('PRAGMA journal_mode').fetchone()[0].lower() != 'wal':
+                db.execute('PRAGMA journal_mode = WAL')
             db.execute('PRAGMA synchronous = NORMAL')
             db.execute('''CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,

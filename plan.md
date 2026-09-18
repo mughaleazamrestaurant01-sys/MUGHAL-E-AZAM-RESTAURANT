@@ -262,6 +262,20 @@ UI and in its action method.
   the same database, and the UI now reports a WebView bridge timeout after ten
   seconds rather than remaining on an indefinite loading screen.
 
+### 2026-09-18 responsiveness pass — completed
+
+- SQLite lock waits are limited to three seconds, and the WAL mode is only changed
+  for older databases that need migration, avoiding an unnecessary write lock on
+  every normal launch. The UI no longer deep-watches and traverses the complete
+  operational history for each reactive change; direct-entry fields are watched
+  individually while collection actions retain their debounced persistence calls.
+  History and admin sales calculations are now skipped while their tabs are not
+  displayed.
+- The proposed binary `favicon.ico` replacement was reverted because the current
+  pull-request system does not accept binary file diffs. The in-app logo already
+  uses rounded corners and a yellow border; the Windows executable icon can be
+  updated later through a binary-capable release channel without blocking code PRs.
+
 The single-main-computer POS has been built and hardened through **2026-09-18** and
 is **good to go** after the operator installs the current EXE and verifies the Star
 receipt and XSP-210 KOT test prints. The confirmed main-PC configuration is: Star
