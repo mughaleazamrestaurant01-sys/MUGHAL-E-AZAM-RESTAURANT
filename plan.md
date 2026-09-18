@@ -198,32 +198,3 @@ UI and in its action method.
   proceeds in the background because Windows can pause while probing unavailable
   network printers; a printer scan no longer keeps the entire application on its
   opening screen.
-- Added `MULTI_SYSTEM_SETUP_GUIDE.md`, a deferred A–Z deployment guide for the
-  basic LAN mode, local printer setup, access control, validation, troubleshooting,
-  and the required PostgreSQL/server upgrade before simultaneous live operation.
-- Receipt and startup improvements are now being implemented following successful
-  physical printer tests on the main counter PC: a professional, configurable
-  customer receipt format; printer-specific cutter commands; and a review of the
-  first-start database loading path. KOT output remains deliberately compact.
-- Customer receipts now have dedicated configurable restaurant name, tagline,
-  address, phone, professional footer, and counter-cutter profile settings. Printed
-  receipt data includes order type, payment method, customer details, and delivery
-  address when supplied; KOTs intentionally remain simple and use their existing
-  ESC/POS cutter path.
-- The on-screen printable preview now mirrors the professional customer receipt
-  layout (restaurant identity, order type, contact/delivery details, and premium
-  footer), so Preview Bill and the printed bill have the same non-generic content.
-
-## Single-main-computer release readiness — 2026-09-18
-
-The single-main-computer POS has been built and hardened through **2026-09-18** and
-is **good to go** after the operator installs the current EXE and verifies the Star
-receipt and XSP-210 KOT test prints. The confirmed main-PC configuration is: Star
-TSP700II/TSP743II for customer receipts and XSP-210 at `192.168.10.220` for KOTs.
-
-No routine code review or further feature work is required for the single-computer
-installation unless the restaurant reports a reproducible problem or requests a new
-feature. Keep the KOT simple, use the professional customer-receipt settings for
-preview/final bills, and use the selected Star cutter mode after rebuilding this
-release. The future proper PostgreSQL/live-sync project remains separate and must
-be completed before simultaneous multi-terminal operation is approved.
