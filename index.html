@@ -2202,8 +2202,12 @@
                 async startBoot() {
                     // pywebview exposes its API after page load. Waiting for that event
                     // prevents a false "zero users" result and unrestricted access.
+                    // Do not wait forever when the desktop WebView runtime is unavailable.
                     if (!window.pywebview?.api) {
-                        await new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true }));
+                        await Promise.race([
+                            new Promise(resolve => window.addEventListener('pywebviewready', resolve, { once: true })),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('The Windows WebView bridge did not start within 10 seconds. Restart the POS; if this repeats, repair Microsoft Edge WebView2 Runtime.')), 10000))
+                        ]);
                     }
                     try {
                         await this.loadPersistentData();

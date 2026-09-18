@@ -244,12 +244,23 @@ UI and in its action method.
 
 - The supplied Windows screenshots confirm that the installed **Star TSP700II
   (TSP743II)** driver is configured for **Document Bottom: Partial Cut**, and that
-  another application cuts successfully through this same queue. The POS currently
-  uses a `RAW` Windows print job, which deliberately bypasses that driver feature.
+  another application cuts successfully through this same queue. The previous POS
+  path used a `RAW` Windows print job, which deliberately bypassed that driver feature.
   Counter receipts using the default **Windows Star driver** profile now render
   through the Windows/Star driver, allowing its confirmed Document Bottom setting
   to issue the cut. Raw Star and ESC/POS profiles remain available for queues
   configured for direct command control.
+
+### 2026-09-18 desktop startup redesign — completed
+
+- The desktop shell currently starts an unnecessary local HTTP asset server and
+  then opens the embedded browser against it. This adds a second startup service,
+  a socket bind, and a browser network request even though all assets are already
+  packaged locally. The application now launches the bundled `index.html` directly
+  in the WebView, without a local HTTP server, socket bind, or loopback request.
+  A Windows single-instance guard prevents duplicate launches from contending for
+  the same database, and the UI now reports a WebView bridge timeout after ten
+  seconds rather than remaining on an indefinite loading screen.
 
 The single-main-computer POS has been built and hardened through **2026-09-18** and
 is **good to go** after the operator installs the current EXE and verifies the Star

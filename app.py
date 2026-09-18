@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import secrets
 import shutil
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -12,7 +11,6 @@ import tempfile
 import threading
 import argparse
 import http.server
-import socketserver
 import time
 import urllib.error
 import urllib.request
@@ -32,43 +30,26 @@ def get_data_dir():
     return path
 
 
-def get_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
-        return s.getsockname()[1]
+def acquire_single_instance():
+    """Return a Windows mutex handle, or None when the POS is already open."""
+    if sys.platform != 'win32':
+        return True
 
+    import ctypes
 
-class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    # Cache immutable bundled assets between launches; index.html itself stays fresh.
-    def end_headers(self):
-        if self.path.startswith('/assets/'):
-            self.send_header('Cache-Control', 'public, max-age=604800, immutable')
-        else:
-            self.send_header('Cache-Control', 'no-cache')
-        super().end_headers()
-
-    def copyfile(self, source, outputfile):
-        try:
-            super().copyfile(source, outputfile)
-        except (BrokenPipeError, ConnectionResetError):
-            # The embedded browser can cancel a speculative asset request.
-            pass
-
-    def log_message(self, format, *args):
-        pass
-
-
-def create_local_server(directory):
-    """Bind before opening the webview so its first page request cannot race the server."""
-    class CustomHandler(QuietHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=directory, **kwargs)
-
-    class LocalServer(http.server.ThreadingHTTPServer):
-        allow_reuse_address = True
-        daemon_threads = True
-
-    return LocalServer(('127.0.0.1', 0), CustomHandler)
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, 'Local\\MughalEAzamPOSDesktop')
+    if not mutex:
+        raise OSError('Unable to create the POS single-instance lock.')
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            'Mughal-E-Azam POS is already open. Use the existing POS window instead of starting a second copy.',
+            'Mughal-E-Azam POS',
+            0x40,
+        )
+        ctypes.windll.kernel32.CloseHandle(mutex)
+        return None
+    return mutex
 
 
 class Api:
@@ -610,16 +591,24 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
-    # Bind the local asset server synchronously before the embedded browser starts.
-    # This prevents a slow first launch from requesting index.html before a background
-    # server thread has finished binding its port.
-    local_server = create_local_server(get_base_dir())
-    threading.Thread(target=local_server.serve_forever, daemon=True).start()
+    instance_lock = acquire_single_instance()
+    if instance_lock is None:
+        return
+
+    # Everything needed by the interface is local and bundled. Loading index.html
+    # directly avoids starting a second HTTP service, selecting a port, and making
+    # a loopback browser request during each desktop launch.
+    local_html = os.path.join(get_base_dir(), 'index.html')
     api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
     if args.share_lan:
         threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{local_server.server_port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
-    webview.start()
+    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', local_html, js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+    try:
+        webview.start()
+    finally:
+        if sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(instance_lock)
 
 
 if __name__ == '__main__':
