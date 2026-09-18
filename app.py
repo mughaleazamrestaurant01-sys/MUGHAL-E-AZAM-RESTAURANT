@@ -289,11 +289,36 @@ class Api:
         except Exception as exc:
             return {'printers': [], 'error': f'Unable to read system printers: {exc}'}
 
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'):
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'):
         return self.print_direct(printer_name, {
             'title': f'TEST {receipt_type.upper()}', 'orderId': 'TEST-001',
             'items': [], 'isKot': receipt_type.upper() == 'KOT', 'cutMode': cut_mode
         })
+
+    @staticmethod
+    def _print_with_windows_driver(printer_name, text):
+        """Print through the Star Windows driver so its Document Bottom cut applies."""
+        import win32ui
+
+        printer_dc = win32ui.CreateDC()
+        printer_dc.CreatePrinterDC(printer_name)
+        font = win32ui.CreateFont({'name': 'Consolas', 'height': -24, 'weight': 400})
+        printer_dc.StartDoc('POS Receipt')
+        try:
+            printer_dc.StartPage()
+            printer_dc.SelectObject(font)
+            x, y = 24, 24
+            line_height = max(24, printer_dc.GetTextExtent('Ag')[1] + 4)
+            for receipt_line in text.rstrip('\n').split('\n'):
+                printer_dc.TextOut(x, y, receipt_line)
+                y += line_height
+            printer_dc.EndPage()
+            printer_dc.EndDoc()
+        except Exception:
+            printer_dc.AbortDoc()
+            raise
+        finally:
+            printer_dc.DeleteDC()
 
     def print_direct(self, printer_name, receipt_data):
         if not printer_name:
@@ -369,9 +394,29 @@ class Api:
             lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
-        # Star printers use ESC i, while most KOT/ESC-POS printers use GS V B 0.
-        cut_mode = receipt_data.get('cutMode', 'escpos')
-        cut_command = b'\x1b\x69' if cut_mode == 'star' else b'\x1dV\x42\x00'
+        # The Star Windows driver can perform a configured Document Bottom cut, but
+        # only for a driver-rendered job. RAW jobs bypass that driver feature.
+        # Keep raw command profiles for printers/emulations that require them.
+        cut_mode = receipt_data.get('cutMode', 'escpos_full')
+        cut_commands = {
+            'star': b'\x1b\x69',             # Legacy Star (ESC i) setting.
+            'star_full': None,                # Windows Star driver bottom cut.
+            'star_raw_full': b'\x1b\x69',    # Star line-mode raw full cut.
+            'star_partial': b'\x1b\x6d',     # Star line-mode partial cut.
+            'escpos': b'\x1dV\x42\x00',     # Legacy ESC/POS setting.
+            'escpos_full': b'\x1dV\x00',
+            'escpos_partial': b'\x1dV\x01',
+            'none': b'',
+        }
+        if cut_mode not in cut_commands:
+            return {'status': 'error', 'message': 'The selected printer cut profile is invalid.'}
+        if cut_mode == 'star_full' and sys.platform == 'win32':
+            try:
+                self._print_with_windows_driver(printer_name, text)
+                return {'status': 'success', 'message': f'Print job sent to {printer_name} using the Windows Star driver.'}
+            except Exception as exc:
+                return {'status': 'error', 'message': f'Windows driver print failed: {exc}'}
+        cut_command = (b'\n' * 5) + cut_commands[cut_mode]
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -548,7 +593,7 @@ class RemoteApi:
     def select_backup_folder(self): return {'ok': False, 'error': 'Select backup folders on the main counter PC.'}
     def restore_from_directory(self): return {'ok': False, 'error': 'Restore backups on the main counter PC.'}
     def get_system_printers(self): return Api.get_system_printers(self)
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
     def print_direct(self, printer_name, receipt_data): return Api.print_direct(self, printer_name, receipt_data)
 
 

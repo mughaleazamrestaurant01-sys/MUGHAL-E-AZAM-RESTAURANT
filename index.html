@@ -565,7 +565,7 @@
                             <div class="p-4 bg-[#18191d] rounded-2xl neu-pressed space-y-2">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold text-amber-400 block"><i class="fa-solid fa-fire mr-1"></i>2. Kitchen Ticket Printer (KOT Queue)</span>
-                                    <button @click="testPrinterHardware(printerConfig.kitchenPrinterName, 'Kitchen KOT', 'escpos')" class="px-2.5 py-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
+                                    <button @click="testPrinterHardware(printerConfig.kitchenPrinterName, 'Kitchen KOT', 'escpos_full')" class="px-2.5 py-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-lg font-bold text-[11px] flex items-center space-x-1">
                                         <i class="fa-solid fa-vial mr-1"></i>
                                         <span>Test KOT</span>
                                     </button>
@@ -602,10 +602,14 @@
                                 <div>
                                     <label class="text-neu-muted block mb-1">Counter Printer Cut Command</label>
                                     <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2 rounded-xl text-white outline-none">
-                                        <option value="star">Star printer (ESC i cut)</option>
-                                        <option value="escpos">Standard thermal / ESC-POS (GS V cut)</option>
+                                        <option value="star_full">Windows Star driver — use Document Bottom cut (recommended)</option>
+                                        <option value="star_raw_full">Star line-mode RAW — full cut (ESC i)</option>
+                                        <option value="star_partial">Star line-mode RAW — partial cut (ESC m)</option>
+                                        <option value="escpos_full">Standard thermal / ESC-POS — full cut</option>
+                                        <option value="escpos_partial">Standard thermal / ESC-POS — partial cut</option>
+                                        <option value="none">Do not send a cut command</option>
                                     </select>
-                                    <p class="text-[10px] text-neu-muted mt-1">Use the Test Receipt button after saving. Start with Star for the TSP700II/TSP743II.</p>
+                                    <p class="text-[10px] text-neu-muted mt-1">For the installed Star TSP700II/TSP743II driver, keep Windows Star driver selected: it uses the driver’s Document Bottom cut setting. Use RAW profiles only when the printer itself is configured for that command language.</p>
                                 </div>
                             </div>
 
@@ -618,7 +622,7 @@
                             <p v-if="printerScanError" class="text-[11px] text-amber-400">{{ printerScanError }}</p>
                             <p v-else-if="availablePrinters.length === 0" class="text-[11px] text-neu-muted">No printer drivers were found. Install or connect a printer, then scan again.</p>
                             <p v-else class="text-[11px] text-neu-muted">Showing {{ availablePrinters.length }} installed system print queue(s). A printer must be connected and available through its operating-system driver to appear here.</p>
-                            <p class="text-[11px] text-neu-muted">Receipts are sent as raw text ending immediately after the footer. The printer model/driver controls any unavoidable cutter feed.</p>
+                            <p class="text-[11px] text-neu-muted">Windows Star driver mode uses the installed driver and its Document Bottom cut setting. RAW modes feed five lines, then send the selected direct cutter command.</p>
                         </div>
                     </div>
                 </div>
@@ -1616,8 +1620,12 @@
                         <textarea v-model="printerConfig.receiptFooter" rows="2" placeholder="Professional receipt footer" class="w-full neu-input p-2 rounded-xl text-white outline-none"></textarea>
                         <label class="text-neu-muted block">Counter printer cutter command</label>
                         <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2 rounded-xl text-white outline-none">
-                            <option value="star">Star printer (ESC i cut)</option>
-                            <option value="escpos">Standard thermal / ESC-POS (GS V cut)</option>
+                            <option value="star_full">Windows Star driver — use Document Bottom cut (recommended)</option>
+                            <option value="star_raw_full">Star line-mode RAW — full cut (ESC i)</option>
+                            <option value="star_partial">Star line-mode RAW — partial cut (ESC m)</option>
+                            <option value="escpos_full">Standard thermal / ESC-POS — full cut</option>
+                            <option value="escpos_partial">Standard thermal / ESC-POS — partial cut</option>
+                            <option value="none">Do not send a cut command</option>
                         </select>
                     </div>
 
@@ -1922,7 +1930,7 @@
                         restaurantAddress: '',
                         restaurantPhone: '',
                         receiptFooter: 'Thank you for choosing Mughal-E-Azam. We look forward to serving you again!',
-                        receiptCutMode: 'star',
+                        receiptCutMode: 'star_full',
                         autoPrintKitchen: true // The Kitchen KOT button is the only action that sends a KOT.
                     },
 
@@ -2743,7 +2751,7 @@
                                 restaurantAddress: this.printerConfig.restaurantAddress,
                                 restaurantPhone: this.printerConfig.restaurantPhone,
                                 receiptFooter: this.printerConfig.receiptFooter,
-                                cutMode: data.isKot ? 'escpos' : this.printerConfig.receiptCutMode
+                                cutMode: data.isKot ? 'escpos_full' : this.printerConfig.receiptCutMode
                             };
                             const result = await window.pywebview.api.print_direct(target, payload);
                             if (result.status !== 'success') {
@@ -2801,7 +2809,7 @@
                     }
                 },
 
-                async testPrinterHardware(printerName, typeLabel, cutMode = 'escpos') {
+                async testPrinterHardware(printerName, typeLabel, cutMode = 'escpos_full') {
                     if (!printerName) {
                         this.showToast('Select a printer before running a test.');
                         return;
