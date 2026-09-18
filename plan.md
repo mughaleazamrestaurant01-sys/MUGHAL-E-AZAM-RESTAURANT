@@ -1,5 +1,18 @@
 # POS hardening and completion plan
 
+## 2026-09-18 receipt-template implementation — completed
+
+- Applying the five approved layouts in `Receipts design.html` to the live POS
+  receipt pipeline: Kitchen KOT, unpaid preview bill, paid dine-in receipt,
+  takeaway receipt, and delivery receipt. This includes both the on-screen
+  printable document and the native thermal-printer text payload.
+- The on-screen printable area now uses the approved monospace dividers,
+  headings, order-type metadata, totals, and order-specific closing messages.
+- The native thermal payload now mirrors those templates, including the KOT item
+  grid, unpaid preview notice, paid/order-type totals, takeaway token, and
+  delivery customer/COD sections. Python compilation, Vue script syntax, and
+  mocked native print-payload checks for all five variants passed.
+
 ## Review status: single-computer POS completed; shared two-computer POS not yet built
 
 This document was reviewed against the active desktop entry point (`index.html`) and

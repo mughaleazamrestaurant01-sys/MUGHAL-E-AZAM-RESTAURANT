@@ -96,9 +96,40 @@
         }
 
         @page {
-            size: auto;
+            size: 80mm auto;
             margin: 0mm;
         }
+
+        .thermal-receipt {
+            width: 100%;
+            max-width: 320px;
+            color: #000;
+            background: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            line-height: 1.25;
+            padding: 20px 16px;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, .12);
+            overflow-wrap: break-word;
+        }
+
+        .thermal-divider {
+            margin: 4px 0;
+            overflow: hidden;
+            white-space: nowrap;
+            letter-spacing: -1px;
+        }
+
+        .thermal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .thermal-row > :first-child { min-width: 0; }
+        .thermal-row > :last-child { flex: 0 0 auto; }
 
         @media print {
             body * {
@@ -119,9 +150,16 @@
                 page-break-inside: avoid !important;
                 color: black !important;
                 background: white !important;
-                padding: 5px 10px !important;
+                padding: 0 !important;
                 font-family: 'Courier New', Courier, monospace !important;
-                font-size: 11px !important;
+                font-size: 12px !important;
+            }
+            .thermal-receipt {
+                width: 80mm !important;
+                max-width: 80mm !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 4mm !important;
             }
         }
     </style>
@@ -1415,37 +1453,61 @@
 
         <!-- Printable Thermal Receipt Area -->
         <div id="printable-area" class="hidden print:block">
-            <div class="text-center border-b pb-2 mb-2">
-                <div class="font-black text-base uppercase tracking-wide">{{ printerConfig.restaurantName || printerConfig.receiptHeader || 'MUGHAL-E-AZAM RESTAURANT' }}</div>
-                <div v-if="printerConfig.restaurantTagline" class="text-[10px] font-semibold">{{ printerConfig.restaurantTagline }}</div>
-                <div v-if="printerConfig.restaurantAddress" class="text-[10px]">{{ printerConfig.restaurantAddress }}</div>
-                <div v-if="printerConfig.restaurantPhone" class="text-[10px]">{{ printerConfig.restaurantPhone }}</div>
-            </div>
-            <div class="text-xs mb-2">
-                <div class="text-center font-bold mb-1">{{ printableReceipt.title || 'RECEIPT' }}</div>
-                <div>Order #: <b>{{ printableReceipt.orderId }}</b></div>
-                <div>Date/Time: {{ printableReceipt.time }}</div>
-                <div v-if="printableReceipt.orderType">Order Type: {{ printableReceipt.orderType }}</div>
-                <div v-if="printableReceipt.customerName">Customer: {{ printableReceipt.customerName }}</div>
-                <div v-if="printableReceipt.customerPhone">Phone: {{ printableReceipt.customerPhone }}</div>
-                <div v-if="printableReceipt.customerAddress">Address: {{ printableReceipt.customerAddress }}</div>
-                <div v-if="printableReceipt.tableName">Table: {{ printableReceipt.tableName }}</div>
-            </div>
-            <div class="border-t border-b py-2 mb-2">
-                <div v-for="(item, idx) in printableReceipt.items" :key="idx" class="flex justify-between text-xs py-0.5">
-                    <span>{{ item.qty }}x {{ item.name }}</span>
-                    <span>Rs. {{ item.price * item.qty }}</span>
-                </div>
-            </div>
-            <div class="text-xs space-y-0.5">
-                <div class="flex justify-between"><span>Subtotal:</span><span>Rs. {{ printableReceipt.subtotal }}</span></div>
-                <div v-if="printableReceipt.discount > 0" class="flex justify-between"><span>Discount:</span><span>-Rs. {{ printableReceipt.discount }}</span></div>
-                <div v-if="printableReceipt.deliveryFee > 0" class="flex justify-between"><span>Delivery Fee:</span><span>Rs. {{ printableReceipt.deliveryFee }}</span></div>
-                <div class="flex justify-between font-bold text-sm border-t pt-1 mt-1"><span>Total:</span><span>Rs. {{ printableReceipt.grandTotal }}</span></div>
-            </div>
-            <div class="text-center text-[10px] mt-4 pt-2 border-t">
-                {{ printerConfig.receiptFooter || 'Thank you for choosing Mughal-E-Azam. We look forward to serving you again!' }}
-            </div>
+            <article class="thermal-receipt">
+                <template v-if="printableReceipt.isKot">
+                    <div class="text-center font-bold uppercase text-sm">*** Kitchen Ticket ***</div>
+                    <div class="thermal-divider">================================</div>
+                    <div v-if="printableReceipt.tableName" class="text-center font-bold text-lg">TABLE: {{ printableReceipt.tableName }}</div>
+                    <div class="thermal-divider">--------------------------------</div>
+                    <div class="text-[11px] space-y-0.5 my-2">
+                        <div>KOT NO : {{ printableReceipt.orderId }}</div><div>TIME   : {{ printableReceipt.time }}</div>
+                        <div v-if="printableReceipt.orderType">TYPE   : {{ printableReceipt.orderType }}</div>
+                    </div>
+                    <div class="thermal-divider">================================</div>
+                    <div class="thermal-row font-bold text-[11px]"><span>ITEM DESCRIPTION</span><span>QTY</span></div>
+                    <div class="thermal-divider">================================</div>
+                    <div class="space-y-2 my-2">
+                        <div v-for="(item, idx) in printableReceipt.items" :key="idx" class="thermal-row font-bold text-[13px]"><span>{{ item.name }}</span><span>{{ item.qty }}x</span></div>
+                    </div>
+                    <div class="thermal-divider">================================</div>
+                    <div class="text-center font-bold text-[10px] mt-2">[ END OF ORDER - COOK PROMPTLY ]</div>
+                </template>
+
+                <template v-else>
+                    <div class="text-center space-y-0.5">
+                        <div class="font-bold uppercase text-[15px]">{{ printerConfig.restaurantName || printerConfig.receiptHeader || 'MUGHAL-E-AZAM RESTAURANT' }}</div>
+                        <div v-if="printerConfig.restaurantAddress" class="text-[10px]">{{ printerConfig.restaurantAddress }}</div>
+                        <div v-if="printerConfig.restaurantPhone" class="text-[10px]">TEL: {{ printerConfig.restaurantPhone }}</div>
+                        <div class="thermal-divider">================================</div>
+                        <div class="font-bold uppercase" :class="printableReceipt.isPreview ? 'text-[11px]' : 'text-[14px]'">{{ printableReceipt.title }}</div>
+                        <div class="thermal-divider">================================</div>
+                        <div v-if="printableReceipt.orderType === 'Takeaway'" class="font-bold text-lg">TOKEN: #{{ printableReceipt.orderId }}</div>
+                    </div>
+                    <div class="text-[11px] space-y-0.5 my-2">
+                        <div>{{ printableReceipt.orderType === 'Delivery' ? 'ORD NO' : 'INV NO' }} : {{ printableReceipt.orderId }}</div>
+                        <div>DATE   : {{ printableReceipt.time }}</div>
+                        <div v-if="printableReceipt.tableName">TABLE  : {{ printableReceipt.tableName }}</div>
+                        <div v-if="printableReceipt.orderType === 'Takeaway' && printableReceipt.customerName">CUST   : {{ printableReceipt.customerName }}</div>
+                        <div v-if="printableReceipt.orderType === 'Takeaway' && printableReceipt.customerPhone">PHONE  : {{ printableReceipt.customerPhone }}</div>
+                        <div v-if="printableReceipt.orderType === 'Takeaway'">STATUS : {{ printableReceipt.paymentMethod ? 'PAID (' + printableReceipt.paymentMethod + ')' : 'UNPAID' }}</div>
+                        <div v-if="printableReceipt.orderType === 'Delivery'">PAYMENT: {{ printableReceipt.paymentMethod || 'CASH ON DELIVERY' }}</div>
+                    </div>
+                    <template v-if="printableReceipt.orderType === 'Delivery'">
+                        <div class="thermal-divider">--------------------------------</div>
+                        <div class="text-[11px] space-y-0.5"><div class="font-bold">CUSTOMER DETAILS:</div><div v-if="printableReceipt.customerName">NAME : {{ printableReceipt.customerName }}</div><div v-if="printableReceipt.customerPhone">TEL  : {{ printableReceipt.customerPhone }}</div><div v-if="printableReceipt.customerAddress">ADDR : {{ printableReceipt.customerAddress }}</div></div>
+                    </template>
+                    <div class="thermal-divider">--------------------------------</div>
+                    <div class="thermal-row font-bold text-[10px]"><span>QTY DESCRIPTION</span><span>PRICE (RS.)</span></div>
+                    <div class="thermal-divider">--------------------------------</div>
+                    <div class="space-y-1 my-2 text-[11px]"><div v-for="(item, idx) in printableReceipt.items" :key="idx" class="thermal-row"><span>{{ item.qty }} x {{ item.name }}</span><span>{{ receiptMoney(item.price * item.qty) }}</span></div></div>
+                    <div class="thermal-divider">--------------------------------</div>
+                    <div class="text-[11px] space-y-0.5"><div class="thermal-row"><span>SUB TOTAL</span><span>{{ receiptMoney(printableReceipt.subtotal) }}</span></div><div v-if="printableReceipt.discount > 0" class="thermal-row"><span>DISCOUNT</span><span>-{{ receiptMoney(printableReceipt.discount) }}</span></div><div v-if="printableReceipt.deliveryFee > 0" class="thermal-row"><span>DELIVERY FEE</span><span>{{ receiptMoney(printableReceipt.deliveryFee) }}</span></div></div>
+                    <div class="thermal-divider">================================</div>
+                    <div class="thermal-row font-bold text-base"><span>{{ printableReceipt.isPreview ? 'EST. TOTAL' : (printableReceipt.orderType === 'Delivery' && isCashPayment(printableReceipt.paymentMethod) ? 'COLLECT CASH' : 'TOTAL PAID') }}</span><span>Rs. {{ receiptMoney(printableReceipt.grandTotal) }}</span></div>
+                    <div class="thermal-divider">================================</div>
+                    <div class="text-center font-bold text-[10px] mt-3 whitespace-pre-line">{{ receiptClosingMessage }}</div>
+                </template>
+            </article>
         </div>
 
 
@@ -2068,6 +2130,13 @@
                     return Math.max(0, this.cashTendered - this.grandTotal);
                 },
 
+                receiptClosingMessage() {
+                    if (this.printableReceipt.isPreview) return '* NO PAYMENT RECEIVED *\nPLEASE PRESENT TO CASHIER';
+                    if (this.printableReceipt.orderType === 'Takeaway') return '[ READY FOR COUNTER PICKUP ]\nTHANK YOU FOR ORDERING!';
+                    if (this.printableReceipt.orderType === 'Delivery' && this.isCashPayment(this.printableReceipt.paymentMethod)) return '* CASH ON DELIVERY (COD) *\nDRIVER: PLEASE COLLECT EXACT AMOUNT';
+                    return this.printerConfig.receiptFooter || 'THANK YOU FOR YOUR VISIT!\nPLEASE COME AGAIN';
+                },
+
                 totalRevenue() {
                     return this.orderHistory.reduce((sum, ord) => sum + ord.grandTotal, 0);
                 },
@@ -2202,6 +2271,14 @@
             },
 
             methods: {
+                receiptMoney(value) {
+                    return Number(value || 0).toFixed(2);
+                },
+
+                isCashPayment(method) {
+                    return String(method || '').toLowerCase().includes('cash');
+                },
+
                 async startBoot() {
                     // pywebview exposes its API after page load. Waiting for that event
                     // prevents a false "zero users" result and unrestricted access.
@@ -2378,7 +2455,8 @@
                 printProvisionalBill() {
                     if (this.cart.length === 0) return;
                     this.triggerThermalPrint({
-                        title: 'PROVISIONAL BILL',
+                        title: '** PREVIEW CHECK (UNPAID) **',
+                        isPreview: true,
                         orderId: this.currentOrderId,
                         orderType: this.orderType,
                         time: this.currentTime,
@@ -2712,7 +2790,7 @@
                     }
 
                     this.triggerThermalPrint({
-                        title: 'FINAL PAID RECEIPT',
+                        title: this.orderType === 'Takeaway' ? '*** TAKEAWAY ORDER ***' : (this.orderType === 'Delivery' ? '*** DELIVERY RECEIPT ***' : '*** FINAL CASH RECEIPT ***'),
                         orderId: this.currentOrderId,
                         orderType: this.orderType,
                         time: this.currentTime,
@@ -2777,14 +2855,19 @@
 
                 reprintHistoricalReceipt(orderRecord) {
                     this.triggerThermalPrint({
-                        title: 'REPRINTED RECEIPT',
+                        title: orderRecord.orderType === 'Takeaway' ? '*** TAKEAWAY ORDER (REPRINT) ***' : (orderRecord.orderType === 'Delivery' ? '*** DELIVERY RECEIPT (REPRINT) ***' : '*** FINAL PAID RECEIPT (REPRINT) ***'),
                         orderId: orderRecord.id,
                         time: orderRecord.time,
+                        orderType: orderRecord.orderType || 'Dine-In',
                         tableName: orderRecord.tableName || '',
                         customerName: orderRecord.customerName || '',
+                        customerPhone: orderRecord.customerPhone || '',
+                        customerAddress: orderRecord.customerAddress || '',
+                        paymentMethod: orderRecord.paymentMethod || '',
                         items: orderRecord.items,
                         subtotal: orderRecord.subtotal,
                         discount: orderRecord.discount,
+                        deliveryFee: orderRecord.deliveryFee || 0,
                         tax: orderRecord.tax,
                         grandTotal: orderRecord.grandTotal
                     });
