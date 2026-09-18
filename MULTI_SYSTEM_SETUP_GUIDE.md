@@ -50,7 +50,9 @@ is built, use it only for testing or with one operator making changes at a time.
 
 ## 5. Install the updated POS executable
 
-1. Build or download the same current POS EXE for both computers.
+1. Build or download the same current **single-file** POS EXE for both computers.
+   The release artifact is `Mughal-E-Azam-POS.exe`; do not use an older package
+   that includes an `_internal` folder.
 2. Replace old EXEs; keep a stable path such as
    `C:\MughalPOS\MughalEAzamPOS.exe`.
 3. Use the normal EXE without LAN arguments for single-PC operation.

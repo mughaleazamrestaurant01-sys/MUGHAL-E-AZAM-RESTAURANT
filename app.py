@@ -289,7 +289,7 @@ class Api:
         except Exception as exc:
             return {'printers': [], 'error': f'Unable to read system printers: {exc}'}
 
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'):
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'):
         return self.print_direct(printer_name, {
             'title': f'TEST {receipt_type.upper()}', 'orderId': 'TEST-001',
             'items': [], 'isKot': receipt_type.upper() == 'KOT', 'cutMode': cut_mode
@@ -369,9 +369,23 @@ class Api:
             lines.extend(['-' * width, center(receipt_data.get('receiptFooter') or 'Thank you for your order!')])
 
         text = '\n'.join(line for line in lines if line is not None) + '\n'
-        # Star printers use ESC i, while most KOT/ESC-POS printers use GS V B 0.
-        cut_mode = receipt_data.get('cutMode', 'escpos')
-        cut_command = b'\x1b\x69' if cut_mode == 'star' else b'\x1dV\x42\x00'
+        # Feed before cutting: the cutter is above the print head, so a receipt
+        # that ends at the footer may otherwise never reach it. Keep the legacy
+        # values for saved installations, then support the explicit profiles
+        # exposed in Hardware setup.
+        cut_mode = receipt_data.get('cutMode', 'escpos_full')
+        cut_commands = {
+            'star': b'\x1b\x69',             # Legacy Star (ESC i) setting.
+            'star_full': b'\x1b\x69',        # Star line-mode full cut.
+            'star_partial': b'\x1b\x6d',     # Star line-mode partial cut.
+            'escpos': b'\x1dV\x42\x00',     # Legacy ESC/POS setting.
+            'escpos_full': b'\x1dV\x00',
+            'escpos_partial': b'\x1dV\x01',
+            'none': b'',
+        }
+        if cut_mode not in cut_commands:
+            return {'status': 'error', 'message': 'The selected printer cut profile is invalid.'}
+        cut_command = (b'\n' * 5) + cut_commands[cut_mode]
         try:
             if sys.platform == 'win32':
                 import win32print
@@ -548,7 +562,7 @@ class RemoteApi:
     def select_backup_folder(self): return {'ok': False, 'error': 'Select backup folders on the main counter PC.'}
     def restore_from_directory(self): return {'ok': False, 'error': 'Restore backups on the main counter PC.'}
     def get_system_printers(self): return Api.get_system_printers(self)
-    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
+    def test_printer(self, printer_name, receipt_type='Test', cut_mode='escpos_full'): return Api.test_printer(self, printer_name, receipt_type, cut_mode)
     def print_direct(self, printer_name, receipt_data): return Api.print_direct(self, printer_name, receipt_data)
 
 

@@ -1,4 +1,4 @@
-name: Build Fast Windows POS Package
+name: Build Portable Windows POS EXE
 
 on:
   push:
@@ -25,10 +25,10 @@ jobs:
 
       - name: Build EXE with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon="assets/images/favicon.ico" --name "Mughal-E-Azam-POS" --hidden-import=win32print --hidden-import=pywintypes --add-data "index.html;." --add-data "assets;assets" app.py
+          pyinstaller --noconfirm --onefile --windowed --icon="assets/images/favicon.ico" --name "Mughal-E-Azam-POS" --hidden-import=win32print --hidden-import=pywintypes --add-data "index.html;." --add-data "assets;assets" app.py
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Mughal-E-Azam-POS-Windows-Fast-Start
-          path: dist/Mughal-E-Azam-POS
+          name: Mughal-E-Azam-POS-Windows
+          path: dist/Mughal-E-Azam-POS.exe
