@@ -1,118 +1,158 @@
 # POS hardening and completion plan
 
-## Completed
+## Review status: single-computer POS completed; shared two-computer POS not yet built
 
-1. Consolidated the desktop POS onto the active `index.html` entry point and removed the stale duplicate page.
-2. Added SQLite-backed application-state persistence for orders, tables, KDS tickets, carts, customer details, and order numbering.
-3. Implemented recipe inventory validation and deduction at paid-order completion.
-4. Replaced browser-side plaintext authentication with PBKDF2-hashed credentials and bridge-side authentication.
-5. Added detailed native thermal receipt/KOT rendering and accurate printer setup guidance.
-6. Added first-run administrator setup, durable user-account safeguards, boot locking, and visible feedback messages.
-7. Added JSON backup coverage for operational state and surfaced backup/import errors.
-8. Validated Python compilation, inline JavaScript syntax, state/authentication flows, receipt rendering, and diff whitespace.
+This document was reviewed against the active desktop entry point (`index.html`) and
+the native Python bridge (`app.py`). The stale observations in the previous version
+have been replaced with the current implementation status.
 
-## Operational notes
+## Delivered functionality
 
-- The printer setup tab lists **installed operating-system print queues**. A physically connected printer appears only after its driver/queue is available to Windows or CUPS.
-- Receipt payloads now end directly after the footer with one newline. The printer model and driver still control any unavoidable minimum feed required before cutting.
+1. **One active application path.** The desktop application serves `index.html` and
+   packages that file plus `assets/`. There is no second shipped HTML screen to
+   maintain.
+2. **Durable POS state.** SQLite persists menu items, inventory, recipes, orders,
+   purchases, customers, tables, KDS tickets, carts, selected tables, printer
+   configuration, the next order number, discounts, payment details, and unfinished
+   customer/delivery fields. A watched, debounced save covers values changed directly
+   in the screen, so they do not depend on a separate Save button. Reloading restores
+   unfinished work and active kitchen tickets.
+3. **Reliable order numbering.** The current order number is saved with the rest of
+   the state, so normal application restarts do not return invoice numbering to
+   `1001`.
+4. **Recipe stock control.** Paid orders validate every recipe ingredient before
+   completion. They are rejected when an ingredient is missing or stock is too low;
+   otherwise the required quantities are deducted and persisted.
+5. **Native receipt and KOT output.** The bridge renders configured receipt header
+   and footer, order details, customer/table details, all line items, subtotal,
+   discount, delivery fee, and total as raw thermal-printer text. Receipt printing,
+   KOT printing, provisional bills, and historical reprints all use that payload.
+6. **Account security and setup.** Passwords use PBKDF2 hashes, authentication is
+   performed by the native bridge, and only non-sensitive user fields reach the UI.
+   A new installation remains locked until its first administrator account is
+   created. The last user cannot be deleted, and the last administrator cannot be
+   deleted or demoted. The interface now uses the selected permission checkboxes to
+   hide protected tabs/actions and rejects direct in-app attempts to use protected
+   menu, inventory, table, KDS, or recipe-management actions.
+7. **Safe startup and feedback.** The UI waits for the pywebview bridge before it
+   reads data or unlocks the POS. Startup failures keep the application locked and
+   display an error. Toast messages give users success and error feedback.
+8. **Backups and restore.** Selecting a custom folder immediately creates a
+   consistent SQLite backup there and stores that folder for future automatic
+   backups. The Backup page also has an explicit **Create Backup Now** button and
+   shows the saved file path or any backup error. Native backups include users; JSON
+   export/import covers operational business state (but not user accounts). Restore
+   validates a SQLite backup before replacing the live database.
+9. **Payment validation.** Cash orders cannot be completed until cash received is
+   at least the payable total. This prevents recording an underpaid cash sale.
 
-# Need a quick and deep review
+## Validation completed
 
-High-confidence dummy / incomplete functionality
-Thermal receipt and KOT printing are effectively dummy.
+- Python source compilation and AST parsing succeeded.
+- The inline Vue application script passed JavaScript syntax validation.
+- Isolated SQLite tests verified administrator creation, password authentication,
+  prevention of the final-administrator demotion/deletion, and deletion once a
+  second administrator exists.
+- State persistence and custom-folder backup were tested with a temporary SQLite
+  database, including reopening the resulting backup and checking saved cart and
+  discount data.
+- Permission-gate checks verified that menu management requires `menu_manage` (not
+  merely `pos`) and that protected action methods have an explicit permission guard.
+- A whitespace check found no patch errors.
 
-The Vue UI builds a complete printable receipt with line items, totals, delivery fee, and configured header/footer. 
+## Confirmed restaurant setup and requirements
 
-However, the Python printer bridge sends only a title, order ID, and blank lines to the printer. It never reads items, totals, customer/table fields, header, or footer from receipt_data. 
+The requested installation is a **two-computer shared POS** on an existing wired
+Ethernet LAN. Mobile ordering is deliberately out of scope for now.
 
-Therefore, “Complete Paid Order & Print Receipt,” KOT printing, reprinting, receipt branding, and printed bill details are misleading: a real printer receives an almost empty slip rather than the detailed receipt displayed in the HTML.
+| Device | Operating system | Required use | Local receipt printer |
+| --- | --- | --- | --- |
+| Main counter PC | Windows 10 | Runs all day; central server, dine-in/counter POS, administration, reports | Star TSP700II / TSP743II (USB) |
+| Evening laptop | Windows 11 | Takeaway and delivery POS from 6 PM to 11 PM | SRP-352 Plus (USB) |
+| Kitchen printer | Network-connected | Prints KOT only after the user clicks **Kitchen KOT** | XSP-210 (LAN; exact IP still required) |
 
-“Recipe Deduction” is not implemented.
+Both computers and the kitchen printer are already connected to the same router by
+Ethernet. The administrator will create the laptop user's account and choose its
+permissions inside the POS.
 
-The inventory screen explicitly calls itself “Kitchen Raw Stock & Recipe Deduction.” 
+### Required shared behaviour
 
-A recipe editor exists and adds ingredient/quantity entries to dishes. 
+1. Both computers must read and write one shared set of users, menu, recipes,
+   stock, customers, orders, invoices, reports, KDS tickets, and tables.
+2. A table made busy on either computer must become busy on the other computer
+   promptly, before it can be selected for another order.
+3. A takeaway/delivery order entered on the laptop must promptly appear on the main
+   counter PC, including sales, customer, inventory, and history data.
+4. The main PC prints customer receipts only to its Star USB printer; the laptop
+   prints customer receipts only to its SRP-352 Plus USB printer.
+5. Both PCs must be able to send a KOT to the same kitchen network printer, but
+   only after the operator explicitly clicks the **Kitchen KOT** button. Completing
+   payment and printing a provisional bill must not create a KOT.
+6. The main counter PC must stay powered on while the laptop is in use. Internet is
+   not required for this local-LAN system.
 
-But submitting an order only adds a ticket to kdsOrders, optionally prints it, and saves state; it never iterates over dish recipes or decreases ingredient quantities. 
+## Shared two-computer feature: current progress
 
-Completing payment also writes the order history and clears the cart without changing inventory. 
+**Implementation progress: 0% of the shared two-computer feature.** The current
+application is a local desktop POS only. Each installation selects its own data
+directory and opens its own `database.sqlite`, so the main PC and laptop currently
+have separate data and cannot show each other's tables, orders, stock, or users.
 
-Conclusion: recipe setup is currently stored configuration only; stock deduction is a dummy claim.
+Some existing local features can be reused later (accounts, printer selection, KOT
+button, receipts, inventory, and local backups), but they do **not** provide network
+sharing. In particular, the current Python bridge is exposed only to its own local
+desktop window and starts an HTTP server on `127.0.0.1`; it is not a LAN API server.
+Do not share the current SQLite database file through a Windows folder or network
+drive: SQLite over a network share is not a safe solution for simultaneous POS use.
 
-Table management is not persisted.
+### Build plan before the laptop is connected
 
-The application starts with four hard-coded sample/default tables (Table 01–Table 04). 
+1. **Central server and database:** run a proper server service on the main counter
+   PC and move shared operational data to PostgreSQL (recommended) or another
+   supported network database. The service must bind only to the restaurant LAN and
+   require authenticated requests.
+2. **Desktop client mode:** make both POS installations connect to that server rather
+   than opening their own local SQLite operational database. Keep each PC's printer
+   selection local to that PC.
+3. **Safe transactions:** make order creation, recipe deduction, invoice numbering,
+   table status, KDS changes, and user edits atomic on the server so two operators
+   cannot overwrite each other or sell the same stock twice.
+4. **Live synchronisation:** add server-driven updates or short safe polling so the
+   other screen sees table/KDS/order changes promptly. Include reconnect and offline
+   messages; do not silently save an offline laptop order to a different local
+   database.
+5. **Kitchen printer installation:** reserve a fixed DHCP address for the XSP-210 in
+   the router, install its Windows network/TCP-IP queue on both PCs, then select
+   that queue as the kitchen printer on each PC. Its exact IP address and driver
+   still need to be confirmed on site.
+6. **End-to-end acceptance test:** use both PCs at the same time to test busy-table
+   blocking, laptop delivery orders, KOT-only printing from each PC, each local
+   receipt printer, stock deduction, simultaneous saves, restart/reconnect, backup,
+   and recovery.
 
-Users can add, rename, delete, select, and release tables in memory. 
+## Remaining operational considerations
 
-But the SQLite state payload does not save tables; it only saves orders, purchases, customers, inventory, menu, categories, expenses, opening cash, and printer configuration. 
+These are not placeholder or dummy features, but are sensible future enhancements:
 
-After restart, table edits are lost and the original four tables return. This makes the “Dining Table Layout & Management” feature only temporarily functional. 
+1. **CSV parser scope.** CSV import is designed for simple one-line records. It
+   does not yet fully support escaped quotation marks or multiline quoted fields.
+2. **Printing depends on operating-system setup.** The app lists installed Windows
+   or CUPS queues. A physical printer must have an installed driver/queue before it
+   can be selected, and printer hardware/driver settings determine any required
+   post-receipt paper feed.
+3. **JSON backups intentionally exclude accounts.** Use the native SQLite folder
+   backup whenever user accounts must be moved or recovered too.
+4. **Shared-POS dependency.** The two-computer feature must be built and tested
+   before the laptop is used as a live second terminal. Until then, it remains a
+   separate local POS installation and must not be treated as synchronized.
 
-Kitchen Display System state is temporary and can look “live” without being durable.
+## Maintainer attention for future chats
 
-The KDS interface advertises “Live kitchen queue order management.” 
-
-Tickets are held only in kdsOrders, and the status button merely changes Pending to Preparing or removes the ticket. 
-
-kdsOrders is excluded from the persisted-state payload. 
-
-A restart loses all active kitchen tickets and statuses. It works as a same-session demo queue, but not as a production kitchen workflow.
-
-Order numbers are not persisted, so duplicate invoices are possible after restart.
-
-The current order starts at the hard-coded value '1001'. 
-
-It increments only in browser memory after payment. 
-
-currentOrderId is not included in the state saved to SQLite. 
-
-Every restart can resume at 1001, even while historical receipts already use those IDs. That makes the order/invoice numbering feature unreliable.
-
-The JSON backup’s UI claim is inaccurate.
-
-The backup screen says the JSON export includes “all menu items, inventory, transactions, customers & users.” 
-
-The exported object does not include users; it also omits purchaseHistory, tables, KDS tickets, and the next order number. 
-
-Native SQLite folder backup does preserve the database, including users, because it copies the SQLite database itself. 
-
-So the folder/database backup is real; the JSON backup is partial and its “users” promise is dummy/incorrect.
-
-Dead or stale code
-MUGHAL-E-AZAM RESTAURANT.html is a stale duplicate and is not the application screen.
-
-The desktop application explicitly serves index.html. 
-
-The Windows build workflow packages index.html and the assets directory, not the duplicate HTML file. 
-
-The duplicate file differs from the active file—for example, it lacks the boot lock and uses older local-storage-style initialization. The active index.html has different persistent-boot behavior. 
-
-This file appears to be an old prototype/copy. It is dead code in the shipped desktop path and could confuse future maintenance.
-
-startBoot() is unused, while its intended safety behavior is bypassed.
-
-startBoot() correctly waits for the pywebviewready event before loading saved data, and it has an error path that keeps the UI locked. 
-
-But Vue’s actual mounted() hook calls loadPersistentData() immediately and sets bootReady = true afterwards. 
-
-loadPersistentData() silently returns if the desktop API is not available. 
-
-This leaves startBoot() as unused code and means the “Never show unrestricted POS content until the desktop database bridge has answered” promise may not hold during bridge timing failures. 
-
-All toast notifications are deliberately non-functional.
-
-Numerous actions call showToast()—for example adding items, queueing orders, saving data, and handling printer errors. 
-
-The method body intentionally does nothing. 
-
-If this was a product decision, it is intentional; otherwise it makes success/error feedback appear dummy because the UI says nothing actually happens.
-
-Not dummy, but important production concerns
-Authentication is not secure. Passwords are stored and returned in plaintext in SQLite.  The login compares plaintext values in the browser. 
-
-First-run access is unrestricted. If there are no users, all permissions are granted.  This may be intended for setup, but there is no forced initial administrator-creation flow.
-
-CSV import is basic and not robust for all valid CSV files. The parser toggles quote mode but does not handle escaped quotes ("") or embedded newlines.  It is usable for simple files, not fully dummy.
-
-The build workflow installs requests, but the application does not import or use it. The workflow’s dependency list includes it.  This is harmless unused build baggage.
+Treat all single-computer functionality above as complete unless a reproducible bug
+is reported. The only planned product work requiring major development is the shared
+two-computer/server feature described in this document. Before starting that work,
+confirm the kitchen printer's fixed LAN IP address and agree on the server database
+and installation process. Do not claim that the two PCs are synchronized, and do not
+use a network-shared SQLite file as a shortcut. When adding a new screen or action,
+assign it to an existing permission and enforce that permission both in the visible
+UI and in its action method.
