@@ -31,7 +31,9 @@ have been replaced with the current implementation status.
    performed by the native bridge, and only non-sensitive user fields reach the UI.
    A new installation remains locked until its first administrator account is
    created. The last user cannot be deleted, and the last administrator cannot be
-   deleted or demoted.
+   deleted or demoted. The interface now uses the selected permission checkboxes to
+   hide protected tabs/actions and rejects direct in-app attempts to use protected
+   menu, inventory, table, KDS, or recipe-management actions.
 7. **Safe startup and feedback.** The UI waits for the pywebview bridge before it
    reads data or unlocks the POS. Startup failures keep the application locked and
    display an error. Toast messages give users success and error feedback.
@@ -54,6 +56,8 @@ have been replaced with the current implementation status.
 - State persistence and custom-folder backup were tested with a temporary SQLite
   database, including reopening the resulting backup and checking saved cart and
   discount data.
+- Permission-gate checks verified that menu management requires `menu_manage` (not
+  merely `pos`) and that protected action methods have an explicit permission guard.
 - A whitespace check found no patch errors.
 
 ## Confirmed restaurant setup and requirements
@@ -149,4 +153,6 @@ is reported. The only planned product work requiring major development is the sh
 two-computer/server feature described in this document. Before starting that work,
 confirm the kitchen printer's fixed LAN IP address and agree on the server database
 and installation process. Do not claim that the two PCs are synchronized, and do not
-use a network-shared SQLite file as a shortcut.
+use a network-shared SQLite file as a shortcut. When adding a new screen or action,
+assign it to an existing permission and enforce that permission both in the visible
+UI and in its action method.

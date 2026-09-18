@@ -254,7 +254,7 @@
                 </button>
 
                 <!-- 4th Tab: Menu & Categories -->
-                <button v-if="hasPermission('pos')" @click="currentTab = 'menu_manage'"
+                <button v-if="hasPermission('menu_manage')" @click="openTab('menu_manage')"
                     :class="{'active text-neu-accent font-bold border-neu-accent': currentTab === 'menu_manage'}" class="px-3.5 py-2 rounded-xl neu-button text-xs font-semibold flex items-center space-x-2 text-neu-muted transition-all whitespace-nowrap border border-transparent">
                     <i class="fa-solid fa-utensils text-amber-400"></i>
                     <span>Menu & Categories</span>
@@ -673,7 +673,7 @@
                             <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-neu-muted text-xs"></i>
                             <input type="text" v-model="searchQuery" placeholder="Search menu item or code..." class="w-full neu-input text-xs text-neu-text rounded-2xl pl-10 pr-4 py-2.5 outline-none focus:ring-1 focus:ring-neu-accent transition">
                         </div>
-                        <button @click="currentTab = 'menu_manage'" class="px-3.5 py-2.5 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow flex items-center space-x-1.5">
+                        <button v-if="hasPermission('menu_manage')" @click="openTab('menu_manage')" class="px-3.5 py-2.5 bg-neu-accent text-white font-bold rounded-2xl text-xs neu-accent-glow flex items-center space-x-1.5">
                             <i class="fa-solid fa-plus-circle"></i>
                             <span>Manage Menu</span>
                         </button>
@@ -845,7 +845,7 @@
             </div>
 
             <!-- Dedicated Menu & Category Management Tab -->
-            <div v-show="currentTab === 'menu_manage' && hasPermission('pos')" class="h-full p-6 overflow-y-auto space-y-6">
+            <div v-show="currentTab === 'menu_manage' && hasPermission('menu_manage')" class="h-full p-6 overflow-y-auto space-y-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 class="text-xl font-bold font-royal text-white">Menu Items & Category Management</h2>
@@ -1015,7 +1015,7 @@
                             <span>Upload Stock CSV</span>
                             <input type="file" accept=".csv" @change="uploadStockCSV" class="hidden">
                         </label>
-                        <button @click="showRecipeModal = true" class="px-4 py-2.5 bg-purple-600 text-white rounded-2xl text-xs font-bold flex items-center space-x-2">
+                        <button v-if="hasPermission('menu_manage')" @click="showRecipeModal = true" class="px-4 py-2.5 bg-purple-600 text-white rounded-2xl text-xs font-bold flex items-center space-x-2">
                             <i class="fa-solid fa-sliders"></i>
                             <span>Dish Recipes</span>
                         </button>
@@ -2326,6 +2326,7 @@
                 },
 
                 saveNewCategory() {
+                    if (!this.requirePermission('menu_manage')) return;
                     if (!this.newCategoryForm.name) return;
                     const catId = this.newCategoryForm.name.toLowerCase().replace(/[^a-z0-9]/g, '');
                     this.categories.push({
@@ -2352,6 +2353,7 @@
                 },
 
                 updateCategory() {
+                    if (!this.requirePermission('menu_manage')) return;
                     const cat = this.categories.find(c => c.id === this.editCategoryForm.id);
                     if (cat) {
                         cat.name = this.editCategoryForm.name;
@@ -2364,6 +2366,7 @@
                 },
 
                 deleteCategory(catId) {
+                    if (!this.requirePermission('menu_manage')) return;
                     if (catId === 'all') return;
                     if (confirm('Are you sure you want to delete this category? Menu items in this category will remain.')) {
                         this.categories = this.categories.filter(c => c.id !== catId);
@@ -2413,6 +2416,7 @@
                 },
 
                 uploadMenuCSV(event) {
+                    if (!this.requirePermission('menu_manage')) return;
                     const file = event.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
@@ -2459,6 +2463,7 @@
                 },
 
                 uploadStockCSV(event) {
+                    if (!this.requirePermission('inventory')) return;
                     const file = event.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
@@ -2505,6 +2510,7 @@
                 },
 
                 saveNewDish() {
+                    if (!this.requirePermission('menu_manage')) return;
                     if (!this.newDishForm.name || !this.newDishForm.price) return;
                     const defaultCat = (this.categories.find(c => c.id !== 'all') || {}).id || 'all';
                     this.menuItems.push({
@@ -2535,6 +2541,7 @@
                 },
 
                 updateDish() {
+                    if (!this.requirePermission('menu_manage')) return;
                     const item = this.menuItems.find(m => m.id === this.editDishForm.id);
                     if (item) {
                         item.name = this.editDishForm.name;
@@ -2549,6 +2556,7 @@
                 },
 
                 deleteMenuItem(id) {
+                    if (!this.requirePermission('menu_manage')) return;
                     this.menuItems = this.menuItems.filter(m => m.id !== id);
                     this.saveLocalStorageBackup();
                     this.showToast('Menu item removed');
@@ -2764,6 +2772,7 @@
                 },
 
                 recordStockPurchase() {
+                    if (!this.requirePermission('inventory')) return;
                     if (!this.purchaseForm.ingredientId || !this.purchaseForm.qty || this.purchaseForm.qty <= 0) {
                         this.showToast('Please select an ingredient and enter a valid quantity.');
                         return;
@@ -2808,6 +2817,7 @@
                 },
 
                 saveNewStock() {
+                    if (!this.requirePermission('inventory')) return;
                     if (!this.newStockForm.name) return;
                     this.inventory.push({
                         id: Date.now(),
@@ -2824,12 +2834,14 @@
                 },
 
                 deleteStockItem(id) {
+                    if (!this.requirePermission('inventory')) return;
                     this.inventory = this.inventory.filter(i => i.id !== id);
                     this.saveLocalStorageBackup();
                     this.showToast('Ingredient removed');
                 },
 
                 addRecipeIngredient(dish) {
+                    if (!this.requirePermission('menu_manage')) return;
                     if (!dish.recipe) dish.recipe = [];
                     dish.recipe.push({ ingredientId: this.inventory[0] ? this.inventory[0].id : 1, qty: 0.1 });
                 },
@@ -2887,6 +2899,7 @@
                 },
 
                 saveRecipes() {
+                    if (!this.requirePermission('menu_manage')) return;
                     this.showRecipeModal = false;
                     this.saveLocalStorageBackup();
                     this.showToast('Dish Recipes Saved');
@@ -3060,6 +3073,7 @@
                         const result = await window.pywebview.api.authenticate(this.loginForm.username, this.loginForm.password);
                         if (result.ok) {
                             this.currentUser = result.user;
+                            this.currentTab = this.firstAllowedTab();
                             this.loginError = '';
                             this.loginForm.password = '';
                             this.showToast(`Welcome ${result.user.name}`);
@@ -3096,6 +3110,7 @@
                         }
                         this.users = saved.users;
                         this.currentUser = signedIn.user;
+                        this.currentTab = this.firstAllowedTab();
                         this.setupForm = { name: '', username: '', password: '' };
                         this.showToast(`Welcome ${signedIn.user.name}`);
                     } catch (error) {
@@ -3112,7 +3127,36 @@
                     return this.currentUser && this.currentUser.permissions && this.currentUser.permissions.includes(perm);
                 },
 
+                requirePermission(perm) {
+                    if (this.hasPermission(perm)) return true;
+                    this.showToast('You do not have permission to use that feature.');
+                    return false;
+                },
+
+                tabPermission(tab) {
+                    return {
+                        pos: 'pos', kds: 'kds', tables: 'tables', menu_manage: 'menu_manage',
+                        inventory: 'inventory', purchasing: 'inventory', history: 'history',
+                        customers: 'customers', admin: 'admin_dash'
+                    }[tab];
+                },
+
+                openTab(tab) {
+                    const permission = this.tabPermission(tab);
+                    if (permission && !this.hasPermission(permission)) {
+                        this.showToast('You do not have permission to use that feature.');
+                        return;
+                    }
+                    this.currentTab = tab;
+                },
+
+                firstAllowedTab() {
+                    return ['pos', 'kds', 'tables', 'menu_manage', 'inventory', 'purchasing', 'history', 'customers', 'admin']
+                        .find(tab => this.hasPermission(this.tabPermission(tab))) || 'pos';
+                },
+
                 advanceKdsStatus(order) {
+                    if (!this.requirePermission('kds')) return;
                     if (order.status === 'Pending') {
                         order.status = 'Preparing';
                     } else {
@@ -3134,18 +3178,21 @@
                 },
 
                 openAddTableModal() {
+                    if (!this.requirePermission('tables')) return;
                     this.editingTableId = null;
                     this.tableForm.name = '';
                     this.showTableModal = true;
                 },
 
                 openEditTableModal(table) {
+                    if (!this.requirePermission('tables')) return;
                     this.editingTableId = table.id;
                     this.tableForm.name = table.name;
                     this.showTableModal = true;
                 },
 
                 saveTable() {
+                    if (!this.requirePermission('tables')) return;
                     if (!this.tableForm.name.trim()) return;
                     if (this.editingTableId) {
                         const found = this.tables.find(t => t.id === this.editingTableId);
@@ -3163,6 +3210,7 @@
                 },
 
                 deleteTable(tableId) {
+                    if (!this.requirePermission('tables')) return;
                     this.tables = this.tables.filter(t => t.id !== tableId);
                     if (this.selectedTable && this.selectedTable.id === tableId) {
                         this.selectedTable = null;
@@ -3180,6 +3228,7 @@
                 },
 
                 openRecipeForDish(item) {
+                    if (!this.requirePermission('menu_manage')) return;
                     this.activeRecipeDish = item;
                     this.showRecipeModal = true;
                 },
@@ -3197,6 +3246,7 @@
                 },
 
                 releaseTable(table) {
+                    if (!this.requirePermission('tables')) return;
                     table.status = 'Available';
                     this.saveLocalStorageBackup();
                     this.showToast(`${table.name} marked Available`);
