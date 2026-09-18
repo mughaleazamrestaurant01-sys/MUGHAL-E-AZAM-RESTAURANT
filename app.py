@@ -51,15 +51,19 @@ class Api:
     def __init__(self, database_path):
         self.database_path = database_path
         self.window = None
+        self._database_lock = threading.RLock()
         self._initialize_database()
 
     def _connection(self):
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, timeout=10)
         connection.row_factory = sqlite3.Row
+        connection.execute('PRAGMA busy_timeout = 10000')
         return connection
 
     def _initialize_database(self):
         with self._connection() as db:
+            db.execute('PRAGMA journal_mode = WAL')
+            db.execute('PRAGMA synchronous = NORMAL')
             db.execute('''CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL, role TEXT NOT NULL, name TEXT NOT NULL,
@@ -92,20 +96,28 @@ class Api:
             'role': row['role'], 'permissions': json.loads(row['permissions'])
         }
 
+    def _create_database_backup(self, directory):
+        try:
+            os.makedirs(directory, exist_ok=True)
+            destination = os.path.join(directory, 'pos_backup_latest.sqlite')
+            temporary = f'{destination}.tmp'
+            with self._database_lock:
+                # SQLite backup makes a consistent copy even while the application is writing.
+                with self._connection() as source, sqlite3.connect(temporary, timeout=10) as target:
+                    source.backup(target)
+                os.replace(temporary, destination)
+            return {'ok': True, 'path': destination}
+        except Exception as exc:
+            if 'temporary' in locals() and os.path.exists(temporary):
+                os.unlink(temporary)
+            return {'ok': False, 'error': f'Backup failed: {exc}'}
+
     def _backup_after_write(self):
         with self._connection() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'backup_directory'").fetchone()
         if not row or not row['value']:
-            return
-        directory = row['value']
-        try:
-            os.makedirs(directory, exist_ok=True)
-            destination = os.path.join(directory, 'pos_backup_latest.sqlite')
-            # SQLite backup makes a consistent copy even while the application is writing.
-            with self._connection() as source, sqlite3.connect(destination) as target:
-                source.backup(target)
-        except Exception as exc:
-            print(f'[BACKUP ERROR] {exc}')
+            return {'ok': True, 'skipped': True}
+        return self._create_database_backup(row['value'])
 
     def get_boot_data(self):
         """A fresh process deliberately has no session; only disk-backed users decide login."""
@@ -141,6 +153,15 @@ class Api:
                         (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', []))))
                     user_id = cursor.lastrowid
                 else:
+                    existing = db.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+                    if not existing:
+                        return {'ok': False, 'error': 'The requested user account was not found.'}
+                    # Do not allow the only administrator to be demoted. Without this
+                    # guard, a valid account set could become impossible to administer.
+                    if existing['role'] == 'Admin' and user.get('role', 'Cashier') != 'Admin':
+                        admin_count = db.execute("SELECT COUNT(*) FROM users WHERE role = 'Admin'").fetchone()[0]
+                        if admin_count <= 1:
+                            return {'ok': False, 'error': 'The last administrator account cannot be changed to a non-admin role.'}
                     if user.get('password'):
                         db.execute('UPDATE users SET username=?, password=?, role=?, name=?, permissions=? WHERE id=?',
                             (username, self._hash_password(user['password']), user.get('role', 'Cashier'), user['name'], json.dumps(user.get('permissions', [])), user_id))
@@ -157,6 +178,13 @@ class Api:
             count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
             if count <= 1:
                 return {'ok': False, 'error': 'The last user account cannot be deleted.'}
+            user = db.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+            if not user:
+                return {'ok': False, 'error': 'The requested user account was not found.'}
+            if user['role'] == 'Admin':
+                admin_count = db.execute("SELECT COUNT(*) FROM users WHERE role = 'Admin'").fetchone()[0]
+                if admin_count <= 1:
+                    return {'ok': False, 'error': 'The last administrator account cannot be deleted.'}
             if db.execute('DELETE FROM users WHERE id = ?', (user_id,)).rowcount != 1:
                 return {'ok': False, 'error': 'The requested user account was not found.'}
         self._backup_after_write()
@@ -169,12 +197,13 @@ class Api:
 
     def save_state(self, state):
         # Users are intentionally excluded: they always use direct SQL writes above.
-        state.pop('users', None)
-        with self._connection() as db:
-            db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                       (json.dumps(state),))
-        self._backup_after_write()
-        return {'ok': True}
+        state = {key: value for key, value in state.items() if key != 'users'}
+        with self._database_lock:
+            with self._connection() as db:
+                db.execute("INSERT INTO application_state(key, value) VALUES ('pos_state', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                           (json.dumps(state),))
+            backup = self._backup_after_write()
+        return {'ok': True, 'backupError': backup.get('error', '')}
 
     def get_system_printers(self):
         """Return installed system print queues; physical-device discovery is driver/OS-owned."""
@@ -253,10 +282,19 @@ class Api:
         if not selected:
             return {'ok': False, 'cancelled': True}
         directory = selected[0] if isinstance(selected, (list, tuple)) else selected
-        with self._connection() as db:
-            db.execute("INSERT INTO settings(key, value) VALUES ('backup_directory', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (directory,))
-        self._backup_after_write()
-        return {'ok': True, 'directory': directory}
+        with self._database_lock:
+            with self._connection() as db:
+                db.execute("INSERT INTO settings(key, value) VALUES ('backup_directory', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (directory,))
+            backup = self._create_database_backup(directory)
+        if not backup['ok']:
+            return backup
+        return {'ok': True, 'directory': directory, 'path': backup['path']}
+
+    def create_backup_now(self):
+        directory = self.get_backup_directory()
+        if not directory:
+            return {'ok': False, 'error': 'Select a custom backup folder first.'}
+        return self._create_database_backup(directory)
 
     def get_backup_directory(self):
         with self._connection() as db:
