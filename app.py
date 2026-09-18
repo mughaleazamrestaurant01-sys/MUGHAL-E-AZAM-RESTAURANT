@@ -547,15 +547,12 @@ def main():
     if args.share_lan and not args.server_token:
         parser.error('--server-token (or MUGHAL_POS_TOKEN) is required with --share-lan.')
 
-    # Bind the local asset server synchronously before the embedded browser starts.
-    # This prevents a slow first launch from requesting index.html before a background
-    # server thread has finished binding its port.
-    local_server = create_local_server(get_base_dir())
-    threading.Thread(target=local_server.serve_forever, daemon=True).start()
+    base_dir, port = get_base_dir(), get_free_port()
+    threading.Thread(target=start_server, args=(port, base_dir), daemon=True).start()
     api = RemoteApi(args.server_url, args.server_token, os.path.join(get_data_dir(), 'terminal-settings.sqlite')) if args.server_url else Api(os.path.join(get_data_dir(), 'database.sqlite'))
     if args.share_lan:
         threading.Thread(target=SharedApiServer((args.server_host, args.server_port), api, args.server_token).serve_forever, daemon=True).start()
-    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{local_server.server_port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
+    api.window = webview.create_window('MUGHAL-E-AZAM - Restaurant', f'http://127.0.0.1:{port}/index.html', js_api=api, width=1280, height=800, resizable=True, min_size=(900, 600))
     webview.start()
 
 
