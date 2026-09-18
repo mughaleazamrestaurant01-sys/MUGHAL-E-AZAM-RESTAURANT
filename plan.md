@@ -1,5 +1,51 @@
 # POS hardening and completion plan
 
+## 2026-09-18 emergency launch recovery — completed
+
+- The loopback/WebView change did not work on the installed Windows runtime: the
+  page remains at “Opening saved POS data” and the process-level mutex prevents a
+  recovery launch even when no usable window exists. Replace both mechanisms with
+  the known-compatible bundled `index.html` launch path, a bridge polling/retry
+  bootstrap, and no stale-process launch block.
+- The loopback server and launch-time mutex have now been removed from the startup
+  path. The Vue bootstrap polls for the native bridge (so it cannot miss an early
+  ready event), times out failed bridge/database calls, and presents a Retry
+  connection control instead of holding the user on an unrecoverable overlay.
+- Python compilation, inline Vue syntax, startup-path assertions, and whitespace
+  validation have passed. Rebuild and replace the Windows EXE before testing on
+  the counter PC; an existing installed EXE cannot contain this recovery change.
+
+## 2026-09-18 receipt legibility and startup reliability — completed
+
+- The on-site print photograph shows that the first template pass is reaching the
+  printer, but it leaves blank header lines and still uses a dense, hard-to-read
+  raw-text presentation. This pass will use a single high-contrast, centered
+  fixed-width layout without empty address/phone rows and will preserve every
+  receipt field.
+- Desktop startup now uses a local threaded loopback asset endpoint on an
+  operating-system-assigned port, verifies its serving thread before creating the
+  WebView, and shuts it down with the application. This avoids intermittent
+  `file://` WebView-origin startup failures and removes fixed-port conflicts.
+- Native receipt composition now omits empty optional header rows and wraps long
+  titles, addresses, and footers rather than truncating them, so the restaurant
+  identity and receipt data remain centered, visible, and complete.
+- The local asset endpoint and native receipt wrapping behaviour were checked in
+  isolation; Python compilation, inline Vue syntax validation, and diff checks
+  also pass.
+
+## 2026-09-18 receipt-template implementation — completed
+
+- Applying the five approved layouts in `Receipts design.html` to the live POS
+  receipt pipeline: Kitchen KOT, unpaid preview bill, paid dine-in receipt,
+  takeaway receipt, and delivery receipt. This includes both the on-screen
+  printable document and the native thermal-printer text payload.
+- The on-screen printable area now uses the approved monospace dividers,
+  headings, order-type metadata, totals, and order-specific closing messages.
+- The native thermal payload now mirrors those templates, including the KOT item
+  grid, unpaid preview notice, paid/order-type totals, takeaway token, and
+  delivery customer/COD sections. Python compilation, Vue script syntax, and
+  mocked native print-payload checks for all five variants passed.
+
 ## Review status: single-computer POS completed; shared two-computer POS not yet built
 
 This document was reviewed against the active desktop entry point (`index.html`) and
