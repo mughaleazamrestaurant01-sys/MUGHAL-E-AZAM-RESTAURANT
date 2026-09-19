@@ -1,0 +1,122 @@
+        <!-- Inventory & Purchasing Module Tab -->
+        <div v-show="(currentTab === 'stock' || currentTab === 'purchasing') && (hasPermission('stock') || hasPermission('purchasing'))" class="h-full flex flex-col p-6 overflow-y-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="font-royal text-2xl font-bold text-white tracking-wide">STOCK & PURCHASING</h2>
+                    <p class="text-xs text-neu-muted">Manage Raw Material Ingredients, Stock Levels & Supply Purchases</p>
+                </div>
+                <button @click="showAddStockModal = true" class="px-4 py-2.5 bg-neu-accent text-white text-xs font-bold rounded-xl neu-accent-glow flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Add Ingredient
+                </button>
+            </div>
+
+            <!-- Stock Table -->
+            <div class="neu-card rounded-2xl p-6 border border-white/5 space-y-4">
+                <h3 class="font-bold text-white text-sm">Inventory Ingredients</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-white">
+                        <thead class="text-[10px] uppercase text-neu-muted border-b border-white/10">
+                            <tr>
+                                <th class="pb-3">Ingredient</th>
+                                <th class="pb-3">In Stock</th>
+                                <th class="pb-3">Unit</th>
+                                <th class="pb-3">Avg Cost / Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/5">
+                            <tr v-for="ing in ingredients" :key="ing.id" class="hover:bg-white/5">
+                                <td class="py-3 font-semibold">{{ ing.name }}</td>
+                                <td class="py-3 font-bold" :class="[ing.inStock < 5 ? 'text-neu-accent' : 'text-emerald-400']">{{ ing.inStock.toFixed(2) }}</td>
+                                <td class="py-3 text-neu-muted">{{ ing.unit }}</td>
+                                <td class="py-3 font-bold text-white">Rs. {{ ing.avgUnitCost.toFixed(2) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- History & Reports Tab -->
+        <div v-show="currentTab === 'records' && hasPermission('records')" class="h-full flex flex-col p-6 overflow-y-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="font-royal text-2xl font-bold text-white tracking-wide">ORDER RECORDS & HISTORY</h2>
+                    <p class="text-xs text-neu-muted">View Past Orders, Reprint Receipts & Analytics</p>
+                </div>
+                <input type="date" v-model="selectedHistoryDate" class="neu-input p-2.5 rounded-xl text-white text-xs outline-none">
+            </div>
+
+            <div class="neu-card rounded-2xl p-6 border border-white/5 space-y-4">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-white">
+                        <thead class="text-[10px] uppercase text-neu-muted border-b border-white/10">
+                            <tr>
+                                <th class="pb-3">Invoice #</th>
+                                <th class="pb-3">Type</th>
+                                <th class="pb-3">Customer</th>
+                                <th class="pb-3">Grand Total</th>
+                                <th class="pb-3">Time</th>
+                                <th class="pb-3 text-right">Reprint</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-white/5">
+                            <tr v-for="ord in filteredHistoryOrders" :key="ord.id" class="hover:bg-white/5">
+                                <td class="py-3 font-bold text-white">{{ ord.id }}</td>
+                                <td class="py-3"><span class="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold">{{ ord.orderType }}</span></td>
+                                <td class="py-3 text-neu-muted">{{ ord.customerName || 'Walk-in' }}</td>
+                                <td class="py-3 font-bold text-emerald-400">Rs. {{ ord.grandTotal.toFixed(2) }}</td>
+                                <td class="py-3 text-neu-muted">{{ ord.time }}</td>
+                                <td class="py-3 text-right">
+                                    <button @click="printReceiptDirectly(ord)" class="px-3 py-1 bg-neu-accent/20 text-neu-accent font-bold rounded-lg text-[10px]">Print</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables & KDS Tabs -->
+        <div v-show="currentTab === 'tables' && hasPermission('tables')" class="h-full p-6 overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="font-royal text-2xl font-bold text-white tracking-wide">DINING TABLES</h2>
+                    <p class="text-xs text-neu-muted">Manage Dining Floor Layout & Occupancy</p>
+                </div>
+                <button @click="showTableModal = true; editingTableId = null;" class="px-4 py-2.5 bg-neu-accent text-white text-xs font-bold rounded-xl neu-accent-glow">
+                    <i class="fa-solid fa-plus mr-1"></i> Add Table
+                </button>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div v-for="t in tables" :key="t.id" class="neu-card p-4 rounded-2xl text-center border border-white/5 relative">
+                    <i class="fa-solid fa-chair text-2xl mb-2" :class="[t.status === 'occupied' ? 'text-neu-accent' : 'text-emerald-400']"></i>
+                    <h4 class="font-bold text-white text-sm">{{ t.name }}</h4>
+                    <span :class="[t.status === 'occupied' ? 'bg-neu-accent/20 text-neu-accent' : 'bg-emerald-500/20 text-emerald-400']" class="text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 inline-block uppercase">
+                        {{ t.status }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- KDS Queue Tab -->
+        <div v-show="currentTab === 'kds' && hasPermission('kds')" class="h-full p-6 overflow-y-auto space-y-6">
+            <div>
+                <h2 class="font-royal text-2xl font-bold text-white tracking-wide">KITCHEN DISPLAY SYSTEM (KDS)</h2>
+                <p class="text-xs text-neu-muted">Live Kitchen Order Tickets & Preparation Queue</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div v-for="ord in kdsQueue" :key="ord.id" class="neu-card p-4 rounded-2xl border border-white/5 space-y-3">
+                    <div class="flex justify-between items-center pb-2 border-b border-white/10">
+                        <span class="font-bold text-white text-sm">{{ ord.id }}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">{{ ord.status }}</span>
+                    </div>
+                    <div class="space-y-1 text-xs">
+                        <div v-for="item in ord.items" :key="item.id" class="flex justify-between text-white">
+                            <span>{{ item.name }}</span>
+                            <span class="font-bold text-neu-accent">x{{ item.qty }}</span>
+                        </div>
+                    </div>
+                    <button @click="updateKdsStatus(ord.id, 'Completed')" class="w-full py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl">Mark Ready</button>
+                </div>
+            </div>
+        </div>

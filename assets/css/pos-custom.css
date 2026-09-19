@@ -1,0 +1,102 @@
+.neu-flat {
+    background: #1e2026;
+    box-shadow: 6px 6px 14px #131418, -6px -6px 14px #292c34;
+}
+
+.neu-pressed {
+    background: #1e2026;
+    box-shadow: inset 4px 4px 8px #121317, inset -4px -4px 8px #2a2d35;
+}
+
+.neu-button {
+    background: #1e2026;
+    box-shadow: 5px 5px 12px #131418, -5px -5px 12px #292c34;
+    transition: all 0.2s ease;
+}
+
+.neu-button:hover {
+    box-shadow: 7px 7px 16px #111215, -7px -7px 16px #2b2f37;
+    transform: translateY(-1px);
+}
+
+.neu-button:active {
+    box-shadow: inset 3px 3px 6px #121317, inset -3px -3px 6px #2a2d35;
+    transform: translateY(0);
+}
+
+.neu-input {
+    background: #141519;
+    box-shadow: inset 3px 3px 6px #0d0e11, inset -3px -3px 6px #1b1c21;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.neu-input:focus {
+    border-color: #ff4d5a;
+    outline: none;
+    box-shadow: inset 3px 3px 6px #0d0e11, inset -3px -3px 6px #1b1c21, 0 0 0 2px rgba(255, 77, 90, 0.2);
+}
+
+.neu-card {
+    background: #1e2026;
+    box-shadow: 8px 8px 20px #111215, -8px -8px 20px #2b2e37;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #141519;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #282b33;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #ff4d5a;
+}
+
+/* Modal Transition */
+.modal-enter-active,
+.modal-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+    opacity: 0;
+}
+
+[v-cloak] {
+    display: none !important;
+}
+
+/* Receipt Print Styling */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    #printable-receipt,
+    #printable-receipt * {
+        visibility: visible;
+    }
+
+    #printable-receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm;
+        margin: 0;
+        padding: 10px;
+        background: white;
+        color: black;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+    }
+}

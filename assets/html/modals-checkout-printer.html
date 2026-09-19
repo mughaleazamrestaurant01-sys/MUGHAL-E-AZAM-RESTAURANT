@@ -1,0 +1,125 @@
+        <!-- Checkout Payment Modal -->
+        <div v-if="showCheckoutModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-[#262832]">
+                    <h3 class="font-bold text-white text-base">Complete Payment & Checkout</h3>
+                    <button @click="showCheckoutModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div class="flex justify-between text-neu-muted">
+                        <span>Grand Total Payable</span>
+                        <span class="text-neu-accent font-bold text-base">Rs. {{ cartGrandTotal.toFixed(2) }}</span>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1.5 font-semibold">Payment Method</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button v-for="m in ['Cash', 'Card', 'Online']" :key="m" @click="paymentMethod = m" :class="[paymentMethod === m ? 'bg-neu-accent text-white font-bold' : 'neu-button text-neu-muted']" class="py-2 rounded-xl text-xs">
+                                {{ m }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="isCashPayment(paymentMethod)">
+                        <label class="text-neu-muted block mb-1.5 font-semibold">Cash Tendered (Rs.)</label>
+                        <input type="number" v-model.number="cashTendered" class="w-full neu-input p-3 rounded-xl text-white text-sm outline-none" placeholder="Enter amount received">
+                        <div v-if="cashTendered !== null && cashTendered >= cartGrandTotal" class="mt-2 text-emerald-400 text-xs font-bold">
+                            Change Due: Rs. {{ (cashTendered - cartGrandTotal).toFixed(2) }}
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="processCheckout" class="w-full py-3.5 bg-neu-accent text-white font-bold rounded-xl neu-accent-glow text-sm">
+                    Confirm & Print Receipt
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal: Dish Recipes -->
+        <div v-if="showRecipeModal && activeRecipeDish" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-md rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-[#262832]">
+                    <h3 class="font-bold text-white text-sm">Recipe: {{ activeRecipeDish.name }}</h3>
+                    <button @click="showRecipeModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="space-y-2 text-xs">
+                    <div v-for="(rec, idx) in activeRecipeDish.recipe" :key="idx" class="flex justify-between items-center p-2 rounded-xl neu-pressed">
+                        <span class="text-white">{{ (ingredients.find(i => i.id === rec.ingredientId) || {}).name || 'Ingredient' }}</span>
+                        <span class="text-neu-muted font-bold">{{ rec.qtyNeeded }} {{ (ingredients.find(i => i.id === rec.ingredientId) || {}).unit || 'units' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Discount -->
+        <div v-if="showDiscountModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-xs rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-[#262832]">
+                    <h3 class="font-bold text-white text-sm">Apply Discount (%)</h3>
+                    <button @click="showDiscountModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <button v-for="pct in [0, 5, 10, 15, 20, 25, 30, 50]" :key="pct" @click="discountPercent = pct; showDiscountModal = false;" class="py-2 neu-button rounded-xl text-xs font-bold text-white hover:text-neu-accent">
+                        {{ pct }}%
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Dual Printers Setup -->
+        <div v-if="showPrinterSettingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="neu-flat w-full max-w-lg rounded-3xl p-6 border border-[#282a35] space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-[#262832]">
+                    <h3 class="font-bold text-white text-sm"><i class="fa-solid fa-print text-neu-accent mr-2"></i>Thermal Printers Configuration</h3>
+                    <button @click="showPrinterSettingsModal = false" class="text-neu-muted hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-neu-muted">Detected System Printers</span>
+                        <button @click="scanPrinters" class="px-2.5 py-1 bg-neu-accent/20 text-neu-accent rounded-lg text-[10px] font-bold">Refresh Printers</button>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1">Counter Cashier Receipt Printer</label>
+                        <select v-model="printerConfig.counterPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            <option value="">-- Select Counter Printer --</option>
+                            <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-neu-muted block mb-1">Kitchen KOT Printer</label>
+                        <select v-model="printerConfig.kitchenPrinterName" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                            <option value="">-- Select Kitchen Printer --</option>
+                            <option v-for="p in availablePrinters" :key="p" :value="p">{{ p }}</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-neu-muted block mb-1">Paper Width</label>
+                            <select v-model="printerConfig.paperWidth" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                <option value="80mm">80mm (48 columns)</option>
+                                <option value="58mm">58mm (32 columns)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-neu-muted block mb-1">Paper Cut Profile</label>
+                            <select v-model="printerConfig.receiptCutMode" class="w-full neu-input p-2.5 rounded-xl text-white outline-none">
+                                <option value="star_full">Star Line / Windows Driver Cut</option>
+                                <option value="escpos_full">ESC/POS Standard Cut</option>
+                                <option value="none">No Auto Cut</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t border-[#262832]">
+                    <button @click="testPrinter(printerConfig.counterPrinterName, 'Counter')" class="px-3 py-2 neu-button text-blue-400 rounded-xl text-xs font-bold">Test Counter</button>
+                    <button @click="testPrinter(printerConfig.kitchenPrinterName, 'KOT')" class="px-3 py-2 neu-button text-amber-400 rounded-xl text-xs font-bold">Test KOT</button>
+                    <button @click="savePrinterSettings" class="px-4 py-2 bg-neu-accent text-white rounded-xl text-xs font-bold neu-accent-glow">Save Configuration</button>
+                </div>
+            </div>
+        </div>

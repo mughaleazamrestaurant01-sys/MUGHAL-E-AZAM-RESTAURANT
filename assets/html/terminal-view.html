@@ -1,0 +1,143 @@
+        <!-- Terminal Tab (Default Main View) -->
+        <div v-show="currentTab === 'pos' && hasPermission('pos')" class="h-full flex flex-col md:flex-row p-4 gap-4">
+
+            <!-- Left Column: Menu Items & Filter Bar -->
+            <div class="flex-1 flex flex-col min-h-0 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex-1 relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-neu-muted text-xs"></i>
+                        <input type="text" v-model="searchQuery" placeholder="Search menu item..." class="w-full neu-input text-xs text-neu-text rounded-2xl pl-10 pr-4 py-2.5 outline-none focus:ring-1 focus:ring-neu-accent transition">
+                    </div>
+                </div>
+
+                <!-- Category Pills -->
+                <div class="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+                    <button @click="selectedCategory = 'all'" :class="[selectedCategory === 'all' ? 'active text-neu-accent font-bold border-neu-accent' : 'text-neu-muted']" class="px-4 py-2 rounded-xl neu-button text-xs whitespace-nowrap flex items-center space-x-1.5 border border-transparent">
+                        <span>All Items</span>
+                    </button>
+                    <button v-for="cat in categories" :key="cat.id" @click="selectedCategory = cat.id" :class="[selectedCategory === cat.id ? 'active text-neu-accent font-bold border-neu-accent' : 'text-neu-muted']" class="px-4 py-2 rounded-xl neu-button text-xs whitespace-nowrap flex items-center space-x-1.5 border border-transparent">
+                        <span>{{ cat.name }}</span>
+                    </button>
+                </div>
+
+                <!-- Menu Items Grid -->
+                <div class="flex-1 overflow-y-auto pr-1 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    <div v-for="item in filteredMenuItems" :key="item.id" @click="addToCart(item)" class="neu-button p-2.5 rounded-2xl cursor-pointer flex flex-col justify-between group hover:border-neu-accent/40 border border-transparent transition duration-150 h-28 relative">
+                        <div class="flex justify-between items-center mb-1">
+                            <span :class="[item.isAvailable ? 'text-emerald-400 bg-emerald-500/20' : 'text-red-400 bg-red-500/20']" class="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase">
+                                {{ item.isAvailable ? 'In Stock' : 'Out of Stock' }}
+                            </span>
+                        </div>
+
+                        <div class="my-auto">
+                            <h3 class="font-semibold text-xs text-white group-hover:text-neu-accent transition line-clamp-1">{{ item.name }}</h3>
+                            <p class="text-[10px] text-neu-muted line-clamp-1">{{ getCategoryName(item.categoryId) }}</p>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-1 border-t border-[#232630]/60">
+                            <span class="font-bold text-xs text-white">Rs. {{ item.price }}</span>
+                            <div class="w-6 h-6 rounded-lg neu-button flex items-center justify-center text-neu-accent group-hover:bg-neu-accent group-hover:text-white transition">
+                                <i class="fa-solid fa-plus text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Cart & Checkout Sidebar -->
+            <div class="w-full md:w-[360px] lg:w-[400px] neu-flat rounded-3xl p-4 flex flex-col h-full border border-[#252730] relative">
+                <div class="flex justify-between items-center pb-2 border-b border-[#262832]">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h2 class="font-bold text-white text-sm">Active Order Cart</h2>
+                            <span class="text-[9px] px-2 py-0.2 rounded bg-neu-accent/20 text-neu-accent uppercase font-bold">{{ orderType }}</span>
+                        </div>
+                    </div>
+                    <button @click="clearCart" class="w-7 h-7 rounded-xl neu-button text-neu-muted hover:text-neu-accent flex items-center justify-center text-xs" title="Clear Cart">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+
+                <!-- Order Type Selector Bar -->
+                <div class="grid grid-cols-3 gap-1.5 my-2 bg-[#191a1f] p-1 rounded-2xl neu-pressed">
+                    <button v-for="t in ['Dine-In', 'Takeaway', 'Delivery']" :key="t" @click="selectOrderType(t)" :class="[orderType === t ? 'active text-neu-accent font-bold' : 'text-neu-muted']" class="py-1 rounded-xl neu-button text-[11px]">
+                        {{ t }}
+                    </button>
+                </div>
+
+                <!-- Table Dropdown for Dine-In -->
+                <div v-if="orderType === 'Dine-In'" class="mb-2 p-2.5 bg-[#18191d] rounded-2xl neu-pressed text-xs">
+                    <label class="text-[10px] text-neu-muted font-bold block mb-1 uppercase">Select Table</label>
+                    <select v-model="selectedTable" class="w-full neu-input p-2 rounded-xl text-white outline-none">
+                        <option :value="null">-- Choose Table --</option>
+                        <option v-for="t in tables" :key="t.id" :value="t" :disabled="t.status === 'occupied'">
+                            {{ t.name }} {{ t.status === 'occupied' ? '(Occupied)' : '(Available)' }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Customer Details for Takeaway/Delivery -->
+                <div v-if="orderType === 'Takeaway' || orderType === 'Delivery'" class="mb-2 p-2.5 bg-[#18191d] rounded-2xl neu-pressed text-xs space-y-1.5">
+                    <input type="text" v-model="activeCustomerName" placeholder="Customer Name" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                    <input type="text" v-model="activeCustomerPhone" placeholder="Phone Number" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                    <input v-if="orderType === 'Delivery'" type="text" v-model="activeCustomerAddress" placeholder="Delivery Address" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                    <input v-if="orderType === 'Delivery'" type="number" min="0" v-model.number="deliveryFeeInput" placeholder="Delivery Fee (Rs.)" class="w-full neu-input text-xs text-white p-1.5 rounded-xl outline-none">
+                </div>
+
+                <!-- Cart Items Scrollable Container -->
+                <div class="flex-1 overflow-y-auto my-1 pr-1 space-y-1.5">
+                    <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-neu-muted py-6">
+                        <i class="fa-solid fa-basket-shopping text-2xl mb-1 text-neu-muted"></i>
+                        <p class="text-xs">Cart is empty.</p>
+                    </div>
+
+                    <div v-for="(item, idx) in cart" :key="idx" class="p-2 rounded-2xl neu-pressed flex justify-between items-center text-xs">
+                        <div class="flex-1 pr-2">
+                            <div class="font-semibold text-white">{{ item.name }}</div>
+                            <div class="text-[10px] text-neu-muted">
+                                Rs. {{ item.price }} x {{ item.qty }} = <span class="text-white font-bold">Rs. {{ item.price * item.qty }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-1 bg-[#18191d] p-1 rounded-xl neu-flat">
+                            <button @click="updateQty(idx, -1)" class="w-5 h-5 rounded-lg neu-button text-neu-accent flex items-center justify-center text-xs font-bold">-</button>
+                            <span class="w-4 text-center text-xs font-bold text-white">{{ item.qty }}</span>
+                            <button @click="updateQty(idx, 1)" class="w-5 h-5 rounded-lg neu-button text-neu-accent flex items-center justify-center text-xs font-bold">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing & Calculations -->
+                <div class="pt-2 border-t border-[#262832] space-y-1 text-xs">
+                    <div class="flex justify-between text-neu-muted">
+                        <span>Subtotal</span>
+                        <span class="text-white font-semibold">Rs. {{ cartSubtotal.toFixed(2) }}</span>
+                    </div>
+                    <div class="flex justify-between text-neu-muted items-center">
+                        <span>Discount ({{ discountPercent }}%)</span>
+                        <button @click="showDiscountModal = true" class="text-neu-accent font-semibold underline">
+                            -Rs. {{ cartDiscountAmount.toFixed(2) }}
+                        </button>
+                    </div>
+                    <div class="flex justify-between text-sm font-bold pt-1 border-t border-[#2a2d37] text-white">
+                        <span>Total Payable</span>
+                        <span class="text-neu-accent font-royal text-base">Rs. {{ cartGrandTotal.toFixed(2) }}</span>
+                    </div>
+                </div>
+
+                <!-- Order Action Controls -->
+                <div class="grid grid-cols-3 gap-1.5 mt-2">
+                    <button @click="sendOrderToQueue" :disabled="cart.length === 0" class="py-2 px-1 neu-button rounded-2xl text-[10px] font-bold text-amber-400 flex flex-col items-center justify-center disabled:opacity-40">
+                        <i class="fa-solid fa-fire text-amber-400 mb-0.5"></i>
+                        <span>Kitchen KOT</span>
+                    </button>
+                    <button @click="printProvisionalBill" :disabled="!selectedTable || !selectedTable.order" class="py-2 px-1 neu-button rounded-2xl text-[10px] font-bold text-blue-400 flex flex-col items-center justify-center disabled:opacity-40">
+                        <i class="fa-solid fa-file-invoice text-blue-400 mb-0.5"></i>
+                        <span>Pre-Bill</span>
+                    </button>
+                    <button @click="showCheckoutModal = true" :disabled="cart.length === 0" class="py-2 px-1 bg-neu-accent text-white font-bold rounded-2xl text-[10px] neu-accent-glow hover:bg-neu-accentHover flex flex-col items-center justify-center disabled:opacity-40">
+                        <i class="fa-solid fa-receipt mb-0.5"></i>
+                        <span>Pay & Print</span>
+                    </button>
+                </div>
+            </div>
+        </div>

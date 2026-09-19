@@ -1,0 +1,130 @@
+:root {
+    --receipt-font: 'Courier Prime', 'JetBrains Mono', 'Courier New', monospace;
+    --receipt-bg: #ffffff;
+    --receipt-text-primary: #000000;
+    --receipt-text-muted: #262626;
+    --receipt-border: #000000;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #f3f4f6;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #1f2937;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.page-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.page-header p {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.receipt-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-content: center;
+    max-width: 1400px;
+    width: 100%;
+}
+
+.receipt-card {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.receipt-card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Base Thermal Paper Container */
+.paper-container {
+    width: 80mm;
+    background-color: var(--receipt-bg);
+    color: var(--receipt-text-primary);
+    font-family: var(--receipt-font);
+    font-size: 11px;
+    line-height: 1.25;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.center { text-align: center; }
+.right { text-align: right; }
+.left { text-align: left; }
+.bold { font-weight: 700; }
+
+.divider-dash {
+    border-bottom: 1px dashed var(--receipt-border);
+    margin: 6px 0;
+}
+
+.divider-solid {
+    border-bottom: 1px solid var(--receipt-border);
+    margin: 6px 0;
+}
+
+.divider-double {
+    border-bottom: 3px double var(--receipt-border);
+    margin: 6px 0;
+}
+
+.header-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.meta-table, .item-table, .total-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.meta-table td, .item-table td, .total-table td {
+    padding: 1px 0;
+    vertical-align: top;
+}
+
+.item-table th {
+    font-weight: 700;
+    text-align: left;
+    border-bottom: 1px solid var(--receipt-border);
+    padding-bottom: 3px;
+}
+
+.footer-space {
+    margin-top: 12px;
+    text-align: center;
+}

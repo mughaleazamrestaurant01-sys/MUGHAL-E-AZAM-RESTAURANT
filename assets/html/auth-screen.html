@@ -1,0 +1,59 @@
+        <!-- Authentication Screen (Only when users exist and not logged in) -->
+        <div v-if="users.length > 0 && !currentUser" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
+            <div class="neu-card p-8 rounded-3xl w-full max-w-md border border-white/5">
+                <div class="text-center mb-8">
+                    <img src="assets/images/logo.jpg" alt="Logo" class="w-20 h-20 mx-auto rounded-full mb-3 border-2 border-neu-accent shadow-lg object-cover">
+                    <h2 class="font-royal text-2xl font-bold text-white tracking-wide">MUGHAL-E-AZAM</h2>
+                    <p class="text-xs text-neu-muted">Staff Portal Authentication</p>
+                </div>
+                <form @submit.prevent="handleLogin" class="space-y-5">
+                    <div v-if="loginError" class="p-3 bg-neu-accent/10 border border-neu-accent/30 rounded-xl text-neu-accent text-xs font-semibold text-center">
+                        {{ loginError }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-neu-muted mb-2">Username</label>
+                        <input v-model="loginForm.username" type="text" required class="neu-input w-full px-4 py-3 rounded-xl text-white text-sm focus:outline-none" placeholder="Enter username">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-neu-muted mb-2">Password</label>
+                        <input v-model="loginForm.password" type="password" required class="neu-input w-full px-4 py-3 rounded-xl text-white text-sm focus:outline-none" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="neu-button w-full py-3.5 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-neu-accent to-red-600 hover:opacity-90">
+                        Sign In to Terminal
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Onboarding First User Setup (When zero users exist) -->
+        <div v-if="users.length === 0" class="fixed inset-0 bg-[#141519] z-50 flex items-center justify-center p-4">
+            <div class="neu-card p-8 rounded-3xl w-full max-w-md border border-white/5">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-neu-accent/10 text-neu-accent rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <i class="fa-solid fa-user-shield text-2xl"></i>
+                    </div>
+                    <h2 class="font-royal text-2xl font-bold text-white">System Onboarding</h2>
+                    <p class="text-xs text-neu-muted mt-1">Create the primary Administrator account to secure your POS.</p>
+                </div>
+                <form @submit.prevent="handleFirstUserSetup" class="space-y-4">
+                    <div v-if="setupError" class="p-3 bg-neu-accent/10 border border-neu-accent/30 rounded-xl text-neu-accent text-xs font-semibold text-center">
+                        {{ setupError }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-neu-muted mb-1">Full Name</label>
+                        <input v-model="setupForm.name" type="text" required class="neu-input w-full px-4 py-2.5 rounded-xl text-white text-sm" placeholder="Administrator Name">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-neu-muted mb-1">Username</label>
+                        <input v-model="setupForm.username" type="text" required class="neu-input w-full px-4 py-2.5 rounded-xl text-white text-sm" placeholder="admin">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-neu-muted mb-1">Password (Min 8 chars)</label>
+                        <input v-model="setupForm.password" type="password" required class="neu-input w-full px-4 py-2.5 rounded-xl text-white text-sm" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="neu-button w-full py-3 rounded-xl text-white font-bold text-sm bg-neu-accent hover:bg-neu-accentHover">
+                        Initialize POS System
+                    </button>
+                </form>
+            </div>
+        </div>

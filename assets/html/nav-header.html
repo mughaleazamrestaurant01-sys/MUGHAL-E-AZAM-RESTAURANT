@@ -1,0 +1,56 @@
+        <!-- Main Header Bar -->
+        <header class="neu-card border-b border-white/5 px-6 py-3 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-4">
+                <img src="assets/images/logo.jpg" alt="Logo" class="w-10 h-10 rounded-full border border-neu-accent object-cover">
+                <div>
+                    <h1 class="font-royal text-lg font-bold text-white leading-tight tracking-wider">MUGHAL-E-AZAM</h1>
+                    <p class="text-[10px] text-neu-muted font-medium">RESTAURANT & CATERING POS</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right border-r border-white/10 pr-4">
+                    <p class="text-xs font-semibold text-white">{{ currentTime }}</p>
+                    <p class="text-[10px] text-neu-muted">{{ new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }}</p>
+                </div>
+                <div v-if="currentUser" class="flex items-center gap-3">
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-white">{{ currentUser.name }}</p>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-neu-accent/20 text-neu-accent font-semibold">{{ currentUser.role }}</span>
+                    </div>
+                    <button @click="handleLogout" title="Logout" class="neu-button w-8 h-8 rounded-xl flex items-center justify-center text-neu-muted hover:text-neu-accent">
+                        <i class="fa-solid fa-power-off text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Plain Responsive Navigation Row Bar (Under Header) -->
+        <nav class="neu-card border-b border-white/5 px-6 py-2 flex items-center gap-2 overflow-x-auto shrink-0">
+            <button v-if="hasPermission('pos')" @click="currentTab = 'pos'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'pos' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-cash-register"></i> Terminal
+            </button>
+            <button v-if="hasPermission('kds')" @click="currentTab = 'kds'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'kds' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-utensils"></i> KDS Queue <span v-if="kdsQueue.length" class="px-1.5 py-0.5 text-[10px] bg-white text-neu-accent rounded-full font-black">{{ kdsQueue.length }}</span>
+            </button>
+            <button v-if="hasPermission('tables')" @click="currentTab = 'tables'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'tables' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-chair"></i> Tables
+            </button>
+            <button v-if="hasPermission('menu')" @click="currentTab = 'menu'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'menu' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-book-open"></i> Menu & Categories
+            </button>
+            <button v-if="hasPermission('stock')" @click="currentTab = 'stock'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'stock' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-boxes-stacked"></i> Stock
+            </button>
+            <button v-if="hasPermission('purchasing')" @click="currentTab = 'purchasing'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'purchasing' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-cart-flatbed"></i> Purchasing
+            </button>
+            <button v-if="hasPermission('records')" @click="currentTab = 'records'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'records' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-receipt"></i> Records & Print
+            </button>
+            <button v-if="hasPermission('crm')" @click="currentTab = 'crm'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'crm' ? 'bg-neu-accent text-white shadow-lg' : 'text-neu-muted hover:text-white']">
+                <i class="fa-solid fa-users"></i> Customers
+            </button>
+            <button v-if="hasPermission('admin')" @click="currentTab = 'admin'" :class="['px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ml-auto', currentTab === 'admin' ? 'bg-purple-600 text-white shadow-lg' : 'text-purple-400 hover:text-white']">
+                <i class="fa-solid fa-shield-halved"></i> Admin Control Center
+            </button>
+        </nav>
